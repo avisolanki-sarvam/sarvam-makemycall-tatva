@@ -1,8 +1,10 @@
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../src/stores/authStore';
 import { COLORS } from '../../src/constants/api';
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
@@ -31,7 +33,11 @@ export default function SettingsScreen() {
 
       {/* Menu Items */}
       <View style={styles.menu}>
-        <MenuItem label="Edit Business Profile" icon="✏️" />
+        {/* Re-uses the FTUX screen as a "re-onboard / author another agent"
+            flow. Tapping creates a NEW agent + overwrites businessDesc on
+            the User row. Until a dedicated edit-profile screen lands, this
+            is the only path back into agent authoring from the home tabs. */}
+        <MenuItem label="Author another agent" icon="✏️" onPress={() => router.push('/profile-setup')} />
         <MenuItem label="Credit History" icon="💳" />
         <MenuItem label="Notification Preferences" icon="🔔" />
         <MenuItem label="Help & Support" icon="❓" />
@@ -47,11 +53,29 @@ export default function SettingsScreen() {
   );
 }
 
-function MenuItem({ label, icon }: { label: string; icon: string }) {
+function MenuItem({
+  label,
+  icon,
+  onPress,
+}: {
+  label: string;
+  icon: string;
+  onPress?: () => void;
+}) {
+  // When onPress isn't provided, render visually but make it explicit that
+  // the item is a stub — easier to spot the next set of TODOs.
+  const isStub = !onPress;
   return (
-    <TouchableOpacity style={styles.menuItem}>
+    <TouchableOpacity
+      style={styles.menuItem}
+      onPress={onPress}
+      disabled={isStub}
+      activeOpacity={isStub ? 1 : 0.6}
+    >
       <Text style={styles.menuIcon}>{icon}</Text>
-      <Text style={styles.menuLabel}>{label}</Text>
+      <Text style={[styles.menuLabel, isStub && styles.menuLabelStub]}>
+        {label}{isStub ? '  (coming soon)' : ''}
+      </Text>
       <Text style={styles.menuArrow}>›</Text>
     </TouchableOpacity>
   );
@@ -101,6 +125,7 @@ const styles = StyleSheet.create({
   },
   menuIcon: { fontSize: 18 },
   menuLabel: { flex: 1, fontSize: 15, fontWeight: '500', color: COLORS.text },
+  menuLabelStub: { color: COLORS.textMuted, fontWeight: '400' },
   menuArrow: { fontSize: 20, color: COLORS.textMuted },
 
   logoutBtn: {

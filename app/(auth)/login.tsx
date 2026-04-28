@@ -9,17 +9,60 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import auth from '@react-native-firebase/auth';
 import { useAuthStore } from '../../src/stores/authStore';
 import { COLORS } from '../../src/constants/api';
+import { api } from '../../src/services/api';
+
+interface DevLoginResponse {
+  success: boolean;
+  accessToken: string;
+  refreshToken: string;
+  user: {
+    id: string;
+    phone: string;
+    name?: string;
+    businessName?: string;
+    onboardingDone: boolean;
+  };
+}
 
 export default function LoginScreen() {
   const router = useRouter();
   const setPendingVerificationId = useAuthStore((s) => s.setPendingVerificationId);
+  const setAuth = useAuthStore((s) => s.setAuth);
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [devLoading, setDevLoading] = useState(false);
+
+  // Dev-only sign-in: hits the gated /auth/dev-login backend route. No real
+  // OTP flow, no Firebase Phone Auth, no SIM needed. Backend mints a Firebase
+  // ID token via firebase-admin + Firebase REST, then exchanges to our JWT
+  // pair through the same AuthCoordinator path as the real OTP flow — so the
+  // resulting User row is byte-identical to a real signin.
+  //
+  // The button only renders in __DEV__. The backend route is also gated by
+  // ALLOW_DEV_LOGIN=1 + FIREBASE_WEB_API_KEY env vars, so even a leaked
+  // build cannot use this against a hardened production backend.
+  const handleDevLogin = async () => {
+    setDevLoading(true);
+    try {
+      const res = await api.post<DevLoginResponse>('/auth/dev-login', {}, { auth: false });
+      setAuth(res.user, res.accessToken, res.refreshToken);
+      router.replace(res.user.onboardingDone ? '/(tabs)' : '/profile-setup');
+    } catch (err: any) {
+      Alert.alert(
+        'Dev login failed',
+        (err?.message || 'Backend rejected dev-login.') +
+          '\n\nMake sure ALLOW_DEV_LOGIN=1 and FIREBASE_WEB_API_KEY are set on the server.',
+      );
+    } finally {
+      setDevLoading(false);
+    }
+  };
 
   const handleSendOtp = async () => {
     const cleaned = phone.replace(/\D/g, '');
@@ -54,7 +97,11 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <Text style={styles.logo}>MakeMyCall</Text>
           <Text style={styles.tagline}>Your AI phone secretary.{'\n'}Enter your number to get started.</Text>
@@ -94,14 +141,40 @@ export default function LoginScreen() {
         <Text style={styles.disclaimer}>
           By continuing, you agree to our Terms of Service and Privacy Policy
         </Text>
-      </View>
+
+        {/* Dev-only — never renders in production builds. */}
+        {__DEV__ ? (
+          <View style={styles.devBlock}>
+            <Text style={styles.devLabel}>Developer</Text>
+            <TouchableOpacity
+              style={[styles.devButton, devLoading && styles.buttonDisabled]}
+              onPress={handleDevLogin}
+              disabled={devLoading}
+              accessibilityLabel="Sign in as a test user (dev only)"
+            >
+              {devLoading ? (
+                <ActivityIndicator color={COLORS.text} />
+              ) : (
+                <Text style={styles.devButtonText}>Sign in as test user</Text>
+              )}
+            </TouchableOpacity>
+            <Text style={styles.devHint}>
+              Bypasses Firebase Phone Auth using a server-side mint.{'\n'}
+              Requires ALLOW_DEV_LOGIN + FIREBASE_WEB_API_KEY on the backend.
+            </Text>
+          </View>
+        ) : null}
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  content: { flex: 1, justifyContent: 'center', padding: 24 },
+  // contentContainerStyle on ScrollView. flexGrow:1 lets the form center
+  // vertically when content fits, AND lets the dev block scroll into view
+  // when it doesn't (e.g. small screens, keyboard up).
+  content: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   header: { alignItems: 'center', marginBottom: 48 },
   logo: { fontSize: 32, fontWeight: '800', color: COLORS.primary, letterSpacing: -0.5 },
   tagline: { fontSize: 16, color: COLORS.textSecondary, textAlign: 'center', marginTop: 8, lineHeight: 22 },
@@ -140,4 +213,37 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.7 },
   buttonText: { color: COLORS.textOnInk, fontSize: 16, fontWeight: '700' },
   disclaimer: { fontSize: 12, color: COLORS.textMuted, textAlign: 'center', marginTop: 32, lineHeight: 18 },
+
+  // ─── Dev-only block ───
+  devBlock: {
+    marginTop: 28,
+    paddingTop: 18,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderSoft,
+    gap: 8,
+  },
+  devLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    textAlign: 'center',
+  },
+  devButton: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  devButtonText: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
+  devHint: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    lineHeight: 14,
+    marginTop: 2,
+  },
 });

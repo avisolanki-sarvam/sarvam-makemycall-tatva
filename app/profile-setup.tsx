@@ -116,8 +116,10 @@ export default function ProfileSetupScreen() {
 
       // Mark onboarding done only after confirmed success
       setUser({ name, businessName, onboardingDone: true });
-      // Explicit redirect — root layout doesn't watch auth state
-      router.replace('/(tabs)');
+      // Land on the agent-preview screen ("here's what we built for you").
+      // CTA there continues to /(tabs). If the user kills the app mid-preview,
+      // a re-open lands on /(tabs) directly because onboardingDone is true.
+      router.replace(`/agent-preview/${result.agent.id}`);
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to create your AI agent. Please try again.');
       setStep('description');

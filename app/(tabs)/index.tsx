@@ -15,6 +15,7 @@ import { COLORS } from '../../src/constants/api';
 interface DashboardData {
   creditBalance: number;
   contactCount: number;
+  agentCount: number;
   hasAgent: boolean;
   agentName: string | null;
   businessDesc: string | null;
@@ -80,8 +81,8 @@ export default function HomeScreen() {
           <Text style={styles.statLabel}>Contacts</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNum}>{dashboard?.hasAgent ? '1' : '0'}</Text>
-          <Text style={styles.statLabel}>AI Agent</Text>
+          <Text style={styles.statNum}>{dashboard?.agentCount ?? (dashboard?.hasAgent ? 1 : 0)}</Text>
+          <Text style={styles.statLabel}>{(dashboard?.agentCount ?? 0) === 1 ? 'AI Agent' : 'AI Agents'}</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={styles.statNum}>{dashboard?.recentCampaign ? '1' : '0'}</Text>
