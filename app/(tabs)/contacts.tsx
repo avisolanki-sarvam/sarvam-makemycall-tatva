@@ -11,6 +11,7 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useContactStore, type Contact } from '../../src/stores/contactStore';
 import { api } from '../../src/services/api';
 import { COLORS } from '../../src/constants/api';
@@ -46,6 +47,7 @@ function subtitleFor(c: Contact): string {
 }
 
 export default function ContactsScreen() {
+  const router = useRouter();
   const {
     contacts,
     searchQuery,
@@ -252,6 +254,13 @@ export default function ContactsScreen() {
           accessibilityLabel="Import from phone"
         >
           <Text style={styles.iconBtnText}>↓</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={() => router.push('/contacts/paste-notes')}
+          accessibilityLabel="Paste notes from register"
+        >
+          <Text style={styles.iconBtnText}>≡</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.addBtn}
