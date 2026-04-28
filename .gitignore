@@ -1,0 +1,62 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Metro
+.metro-health-check*
+
+# Debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS / Windows
+.DS_Store
+Thumbs.db
+
+# Env files — never commit
+.env
+.env.*
+!.env.example
+
+# Firebase secrets — never commit
+google-services.json
+android/app/google-services.json
+GoogleService-Info.plist
+
+# Signing / certs
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# TypeScript
+*.tsbuildinfo
+
+# iOS (generated; we don't ship iOS in v1)
+/ios
+
+# Android build artifacts (commit the source directory, ignore generated bits)
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/local.properties
+android/.cxx/
+android/app/.cxx/
+android/.kotlin/
+*.orig.*
+
+# IDE
+.idea/
+.vscode/
+*.iml
