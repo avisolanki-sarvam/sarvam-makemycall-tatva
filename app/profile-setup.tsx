@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,36 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { AudioModule, useAudioRecorder, RecordingPresets } from 'expo-audio';
+// expo-file-system v18 (SDK 54+) split the API: the modular File/Directory
+// classes are at the top level, the legacy readAsStringAsync + EncodingType
+// live in /legacy. We need readAsStringAsync to base64-encode the M4A
+// recording before POSTing to /onboarding/transcribe — keep the legacy
+// import for now. (Migration to the File class is a future cleanup.)
+import * as FileSystem from 'expo-file-system/legacy';
 import { useAuthStore } from '../src/stores/authStore';
 import { api } from '../src/services/api';
 import { COLORS } from '../src/constants/api';
+
+// Voice input — Sarvam Saaras ASR via POST /onboarding/transcribe.
+// Backend accepts {audio:base64, language, filename, mode}.
+const MAX_RECORDING_SECONDS = 60;        // hard cap so users don't run away
+const MIN_RECORDING_SECONDS = 1;         // anything shorter is almost surely empty
+const TRANSCRIBE_API_TIMEOUT_HINT_S = 30; // user-facing hint only
+
+interface TranscribeResponse {
+  text: string;
+  language: string;
+  languageProbability: number | null;
+  requestId: string | null;
+}
+
+/** "8" → "0:08", "65" → "1:05" — pure-format helper for the recording counter. */
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -33,9 +60,33 @@ export default function ProfileSetupScreen() {
   const [businessName, setBusinessName] = useState('');
   const [businessDesc, setBusinessDesc] = useState('');
   const [language, setLanguage] = useState('en');
-  const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'profile' | 'description' | 'creating'>('profile');
+
+  // Voice input state.
+  // - isRecording: mic is actively capturing audio
+  // - recordingSeconds: live counter for the "0:08 recording…" UI; auto-stops at MAX
+  // - isTranscribing: post-stop, while we send audio to /onboarding/transcribe
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // expo-audio's useAudioRecorder returns a stable recorder ref bound to the
+  // chosen preset. HIGH_QUALITY is M4A/AAC at 44.1kHz — accepted by Sarvam.
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+
+  // Cleanup any in-flight recording if the screen unmounts mid-flow.
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      // Best-effort stop. Errors are ignored — we're tearing down anyway.
+      audioRecorder.stop().catch(() => {});
+    };
+  }, [audioRecorder]);
 
   // Top-left back chevron behaviour:
   // - On the description step, just rewind one sub-step (don't lose typed input).
@@ -74,20 +125,142 @@ export default function ProfileSetupScreen() {
 
   const handleToggleRecording = async () => {
     if (isRecording) {
-      // Stop recording
-      setIsRecording(false);
-      // TODO: Integrate expo-audio for real recording
-      // For now, simulate a transcribed description
-      if (!businessDesc) {
-        setBusinessDesc('We are a business that provides quality services to our customers.');
-      }
+      await stopRecordingAndTranscribe();
     } else {
-      // Start recording
+      await startRecording();
+    }
+  };
+
+  /**
+   * Start a fresh recording. Three responsibilities:
+   *   1. Confirm RECORD_AUDIO permission (request once if missing).
+   *   2. Begin capture via expo-audio's audioRecorder.
+   *   3. Spin up a 1-second timer that auto-stops at MAX_RECORDING_SECONDS
+   *      so users can't accidentally record minutes-long files.
+   */
+  const startRecording = async () => {
+    try {
+      const perm = await AudioModule.requestRecordingPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          'Microphone access needed',
+          'We need microphone permission to record your business description. You can enable it in Settings.',
+        );
+        return;
+      }
+
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+
       setIsRecording(true);
-      // TODO: Start expo-audio recording
-      // const { recording } = await Audio.Recording.createAsync(
-      //   Audio.RecordingOptionsPresets.HIGH_QUALITY
-      // );
+      setRecordingSeconds(0);
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => {
+          const next = prev + 1;
+          if (next >= MAX_RECORDING_SECONDS) {
+            // Auto-stop on the cap. Use a microtask to escape the
+            // setInterval callback — calling stopRecordingAndTranscribe
+            // directly inside the setter is awkward.
+            setTimeout(() => stopRecordingAndTranscribe(), 0);
+          }
+          return next;
+        });
+      }, 1000);
+    } catch (err: any) {
+      console.warn('[profile-setup] startRecording failed:', err);
+      Alert.alert(
+        'Could not start recording',
+        err?.message || 'Try again, or type your description.',
+      );
+      setIsRecording(false);
+    }
+  };
+
+  /**
+   * Stop the active recording, read the file as base64, send to
+   * /onboarding/transcribe, and replace the textarea with the transcript.
+   *
+   * Failure modes:
+   *   - Clip too short → backend returns 400 audio_too_small. Show "couldn't hear, try again".
+   *   - Empty transcript (silent recording) → show "couldn't hear, try again". Don't overwrite existing text.
+   *   - Network error → show generic "try again". Existing text preserved.
+   *   - Sarvam API error (502) → show their error message.
+   */
+  const stopRecordingAndTranscribe = async () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    setIsRecording(false);
+
+    const elapsed = recordingSeconds;
+    setRecordingSeconds(0);
+
+    let fileUri: string | null = null;
+    try {
+      await audioRecorder.stop();
+      fileUri = audioRecorder.uri;
+    } catch (err: any) {
+      console.warn('[profile-setup] stop recording failed:', err);
+      Alert.alert('Recording failed', err?.message || 'Please try again.');
+      return;
+    }
+
+    if (!fileUri) {
+      Alert.alert('Recording failed', 'No audio was captured. Please try again.');
+      return;
+    }
+
+    if (elapsed < MIN_RECORDING_SECONDS) {
+      Alert.alert('Tap and hold to speak', 'That recording was too short. Try again — speak naturally for a few seconds.');
+      return;
+    }
+
+    setIsTranscribing(true);
+    try {
+      const audioBase64 = await FileSystem.readAsStringAsync(fileUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      // language: 'unknown' tells Saaras to auto-detect from the audio rather
+      // than biasing on the UI's selected language. Two reasons:
+      //   1. Users often pick the UI language as a "language of the app"
+      //      preference, then speak in something else (Hinglish, vernacular).
+      //   2. Forcing language_code=hi-IN biases Saaras toward pure Hindi and
+      //      degrades on code-switched Hinglish.
+      // The backend's mode='codemix' default handles the code-switching part;
+      // 'unknown' lets the model pick the dominant language.
+      // The user's UI language selection still drives the AGENT's runtime
+      // language (the agent speaks in their language); it's just not used
+      // as an ASR bias here.
+      const result = await api.post<TranscribeResponse>('/onboarding/transcribe', {
+        audio: audioBase64,
+        filename: 'business-description.m4a',
+        language: 'unknown',
+        // mode omitted — backend defaults to 'codemix' for Indian MSME inputs
+      });
+
+      const text = (result.text || '').trim();
+      if (!text) {
+        Alert.alert(
+          'Couldn\'t hear you clearly',
+          'Try again — speak a bit louder or move somewhere quieter.',
+        );
+        return;
+      }
+
+      // Replace the textarea on success. Users who want to add more can
+      // type into the textarea after the transcript lands.
+      setBusinessDesc(text);
+    } catch (err: any) {
+      const msg = err?.message || 'Could not transcribe the recording.';
+      Alert.alert(
+        'Transcription failed',
+        msg + '\n\nYou can also type your description below.',
+      );
+    } finally {
+      setIsTranscribing(false);
     }
   };
 
@@ -252,12 +425,28 @@ export default function ProfileSetupScreen() {
           <TouchableOpacity
             style={[styles.recordButton, isRecording && styles.recordButtonActive]}
             onPress={handleToggleRecording}
+            disabled={isTranscribing}
+            activeOpacity={isTranscribing ? 1 : 0.6}
           >
-            <Text style={styles.recordButtonIcon}>{isRecording ? '⏹' : '🎙'}</Text>
-            <Text style={[styles.recordButtonText, isRecording && styles.recordButtonTextActive]}>
-              {isRecording ? 'Stop recording' : 'Or tap to describe by voice'}
-            </Text>
+            {isTranscribing ? (
+              <>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={styles.recordButtonText}>Transcribing…</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.recordButtonIcon}>{isRecording ? '⏹' : '🎙'}</Text>
+                <Text style={[styles.recordButtonText, isRecording && styles.recordButtonTextActive]}>
+                  {isRecording
+                    ? `Recording ${formatTime(recordingSeconds)} — tap to stop`
+                    : 'Or tap to describe by voice'}
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
+          <Text style={styles.recordHelper}>
+            Voice is sent to Sarvam for transcription. Audio is not stored.
+          </Text>
 
           <View style={styles.buttonRow}>
             <TouchableOpacity
@@ -339,6 +528,13 @@ const styles = StyleSheet.create({
   recordButtonActive: { borderColor: COLORS.danger, backgroundColor: COLORS.statusDeclinedBg },
   recordButtonIcon: { fontSize: 20 },
   recordButtonText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+  recordHelper: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 4,
+  },
   recordButtonTextActive: { color: COLORS.danger },
   buttonRow: { flexDirection: 'row', gap: 12 },
   backBtn: {
