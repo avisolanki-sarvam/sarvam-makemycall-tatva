@@ -33,11 +33,21 @@ export default function SettingsScreen() {
 
       {/* Menu Items */}
       <View style={styles.menu}>
-        {/* Re-uses the FTUX screen as a "re-onboard / author another agent"
-            flow. Tapping creates a NEW agent + overwrites businessDesc on
-            the User row. Until a dedicated edit-profile screen lands, this
-            is the only path back into agent authoring from the home tabs. */}
-        <MenuItem label="Author another agent" icon="✏️" onPress={() => router.push('/profile-setup')} />
+        {/* Edit business profile — updates User row only (name, businessName,
+            businessDesc) via PUT /user/profile. Does NOT create a new agent. */}
+        <MenuItem
+          label="Edit business profile"
+          icon="✏️"
+          onPress={() => router.push('/settings/edit-profile')}
+        />
+        {/* Author another agent — re-uses the FTUX screen. Creates a NEW
+            agent + overwrites businessDesc on the User row. Backend supports
+            many agents per user. */}
+        <MenuItem
+          label="Author another agent"
+          icon="🤖"
+          onPress={() => router.push('/profile-setup')}
+        />
         <MenuItem label="Credit History" icon="💳" />
         <MenuItem label="Notification Preferences" icon="🔔" />
         <MenuItem label="Help & Support" icon="❓" />

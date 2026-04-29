@@ -15,6 +15,7 @@ export default function RootLayout() {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="profile-setup" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="settings/edit-profile" />
     </Stack>
   );
 }
