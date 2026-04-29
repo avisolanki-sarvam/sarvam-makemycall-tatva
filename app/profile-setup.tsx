@@ -97,28 +97,34 @@ export default function ProfileSetupScreen() {
       return;
     }
 
+    // Brief 'creating' state covers the network round-trip while the backend
+    // inserts the stub Agent row and enqueues the BullMQ job. POST returns
+    // 202 within ~tens of ms — the actual LLM/Samvaad work happens on the
+    // preview screen, where polling progressively reveals the agent.
     setStep('creating');
     setLoading(true);
 
     try {
-      // Update profile name first
+      // Profile name doesn't depend on the agent — set it now.
       await api.put('/user/profile', { name, businessName });
+      setUser({ name, businessName });
 
-      // Create agent from description
-      const result = await api.post<{ success: boolean; agent: any }>('/agents', {
+      // POST returns 202 with a stub agent ({ id, status: 'creating', ... }).
+      // We do NOT set onboardingDone here — that's the preview screen's job
+      // once it observes the status flip to 'ready'. This way, a user who
+      // kills the app mid-creation re-opens to the onboarding flow rather
+      // than landing on /(tabs) with a not-yet-real agent.
+      const result = await api.post<{ success: boolean; agent: { id: string } }>('/agents', {
         businessDescription: businessDesc,
         language,
       });
 
-      if (!result?.success) {
+      if (!result?.success || !result.agent?.id) {
         throw new Error('Agent creation failed');
       }
 
-      // Mark onboarding done only after confirmed success
-      setUser({ name, businessName, onboardingDone: true });
-      // Land on the agent-preview screen ("here's what we built for you").
-      // CTA there continues to /(tabs). If the user kills the app mid-preview,
-      // a re-open lands on /(tabs) directly because onboardingDone is true.
+      // Hand off to the preview screen — that's where the real "creating"
+      // UX lives (skeleton → real content as the worker finishes).
       router.replace(`/agent-preview/${result.agent.id}`);
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to create your AI agent. Please try again.');
@@ -129,12 +135,17 @@ export default function ProfileSetupScreen() {
   };
 
   if (step === 'creating') {
+    // Transitional state: covers the brief POST /agents round-trip. Backend
+    // returns 202 quickly with a stub, then we route to /agent-preview/[id]
+    // where the polling-while-creating UX takes over. So this screen flashes
+    // for ~tens of ms in the happy path; a longer dwell here means the
+    // network is slow.
     return (
       <View style={[styles.container, styles.centerContent]}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.creatingTitle}>Creating your assistant...</Text>
+        <Text style={styles.creatingTitle}>Setting things up...</Text>
         <Text style={styles.creatingSubtitle}>
-          Reading your description and setting up your personalised AI phone secretary
+          Just a moment while we get started.
         </Text>
       </View>
     );

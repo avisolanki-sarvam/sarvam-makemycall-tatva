@@ -1,14 +1,29 @@
 /**
  * /agent-preview/[id]
  *
- * Post-onboarding "moment of wow" screen. The user just described their
- * business; this is where they see what their AI agent will actually do.
+ * Post-onboarding "moment of wow" screen. The user just submitted their
+ * business description; the backend returned 202 with a stub Agent row
+ * (status:'creating') and queued the heavy LLM + Samvaad work to a BullMQ
+ * worker. This screen polls GET /agents/:id every 2s and progressively
+ * swaps its skeleton for the real summaryNL when status flips to 'ready'.
  *
- * Reads `summaryNL` from GET /agents/:id (synthesised at create time, so this
- * is a cheap single read — no LLM round-trip here).
+ * Three render states:
+ *   - 'creating' → skeleton placeholders ("Designing your assistant…")
+ *   - 'ready'    → full summary + "Looks good" CTA into /(tabs)
+ *   - 'failed'   → error card + "Try again" CTA back to profile-setup
+ *
+ * Polling caps at 60s (30 polls × 2s). On timeout we surface a "still
+ * working — we'll have it ready in a moment" CTA into /(tabs); the agent
+ * will eventually flip on the backend and the dashboard will pick it up
+ * on the next open (dashboard.js filters status:'ready').
+ *
+ * onboardingDone is set HERE (not in profile-setup) the first time we
+ * observe status === 'ready'. Rationale: a user who kills the app while
+ * status is still 'creating' should re-open to onboarding, not to /(tabs)
+ * with a half-built agent.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -19,6 +34,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '../../src/services/api';
+import { useAuthStore } from '../../src/stores/authStore';
 import { COLORS } from '../../src/constants/api';
 
 type PossibleOutcome = { key: string; label: string };
@@ -42,27 +58,78 @@ interface Agent {
   callTypes: string[];
   summaryNL: SummaryNL;
   createdAt: string;
+  // Async-creation lifecycle. While 'creating', the LLM/Samvaad work is still
+  // running on the backend and the rest of the fields (name, summaryNL, etc.)
+  // may be empty/placeholder. Preview screen polls GET /agents/:id until this
+  // flips to 'ready' (or 'failed', in which case `error` holds the reason).
+  status?: 'creating' | 'ready' | 'failed';
+  error?: string | null;
 }
+
+const POLL_INTERVAL_MS = 2000;
+const MAX_POLLS = 30; // 60s total
 
 export default function AgentPreviewScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const setUser = useAuthStore((s) => s.setUser);
+
   const [agent, setAgent] = useState<Agent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
+
+  // Track whether we've already flipped onboardingDone — avoids spamming the
+  // store on every poll once status === 'ready'.
+  const onboardingMarked = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let polls = 0;
+
+    async function poll() {
+      if (cancelled) return;
       try {
         const res = await api.get<{ agent: Agent }>(`/agents/${id}`);
-        if (!cancelled) setAgent(res.agent);
+        if (cancelled) return;
+        setAgent(res.agent);
+
+        const status = res.agent.status || 'ready'; // backend defaults; treat undefined as ready
+
+        if (status === 'ready') {
+          // First time we observe ready: mark onboarding complete. The user
+          // can now safely land on /(tabs) on subsequent app opens.
+          if (!onboardingMarked.current) {
+            onboardingMarked.current = true;
+            setUser({ onboardingDone: true });
+          }
+          return; // stop polling
+        }
+        if (status === 'failed') {
+          return; // stop polling, failed-state UI takes over
+        }
+
+        // Still 'creating' — schedule next poll if under cap.
+        polls += 1;
+        if (polls >= MAX_POLLS) {
+          setTimedOut(true);
+          return;
+        }
+        timeoutId = setTimeout(poll, POLL_INTERVAL_MS);
       } catch (e: any) {
         if (!cancelled) setError(e?.message || 'Could not load your agent.');
       }
-    })();
-    return () => { cancelled = true; };
-  }, [id]);
+    }
 
+    poll();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [id, setUser]);
+
+  // ---------- Hard error (network / 404) ----------
   if (error) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -75,15 +142,80 @@ export default function AgentPreviewScreen() {
     );
   }
 
+  // ---------- First fetch hasn't returned yet ----------
   if (!agent) {
     return (
       <View style={[styles.container, styles.centerContent]}>
         <ActivityIndicator size="large" color={COLORS.ink} />
-        <Text style={styles.loadingText}>Tying the bow on your assistant...</Text>
+        <Text style={styles.loadingText}>Loading…</Text>
       </View>
     );
   }
 
+  const status = agent.status || 'ready';
+
+  // ---------- Failed: worker errored ----------
+  if (status === 'failed') {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Text style={styles.errorTitle}>We couldn't finish setting up</Text>
+        <Text style={styles.errorMessage}>
+          {agent.error || 'Something interrupted the setup. Please try again.'}
+        </Text>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => router.replace('/profile-setup')}
+        >
+          <Text style={styles.buttonText}>Try again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ---------- Creating: skeleton state ----------
+  if (status === 'creating') {
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.header}>
+          <Text style={styles.eyebrow}>Designing your assistant</Text>
+          <View style={styles.skelTitle} />
+          <View style={styles.metaRow}>
+            <View style={styles.skelChip} />
+            <View style={styles.skelChip} />
+          </View>
+        </View>
+
+        {[1, 2, 3].map((i) => (
+          <View key={i} style={styles.section}>
+            <View style={styles.skelLabel} />
+            <View style={styles.skelLine} />
+            <View style={[styles.skelLine, { width: '85%' }]} />
+            <View style={[styles.skelLine, { width: '60%' }]} />
+          </View>
+        ))}
+
+        <View style={styles.creatingFooter}>
+          <ActivityIndicator size="small" color={COLORS.textSecondary} />
+          <Text style={styles.creatingFooterText}>
+            {timedOut
+              ? "Still working in the background. You can come back in a moment."
+              : "Reading your description and shaping your assistant…"}
+          </Text>
+        </View>
+
+        {timedOut ? (
+          <TouchableOpacity
+            style={[styles.cta, { marginTop: 12 }]}
+            onPress={() => router.replace('/(tabs)')}
+          >
+            <Text style={styles.ctaText}>Continue to home</Text>
+          </TouchableOpacity>
+        ) : null}
+      </ScrollView>
+    );
+  }
+
+  // ---------- Ready: the existing happy-path layout ----------
   const s = agent.summaryNL || {};
   const outcomes = Array.isArray(s.possibleOutcomes) ? s.possibleOutcomes : [];
   const extras   = Array.isArray(s.suggestedExtraFields) ? s.suggestedExtraFields : [];
@@ -250,4 +382,44 @@ const styles = StyleSheet.create({
     borderRadius: 12, paddingHorizontal: 28, paddingVertical: 12,
   },
   buttonText: { color: COLORS.textOnInk, fontSize: 14, fontWeight: '700' },
+
+  // Skeleton placeholders for the 'creating' state. Static gray boxes —
+  // a subtle pulse animation could come later, but flat boxes already
+  // communicate "loading" clearly when paired with the spinner footer.
+  skelTitle: {
+    height: 30, width: '70%',
+    backgroundColor: COLORS.borderSoft,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  skelChip: {
+    height: 22, width: 70,
+    backgroundColor: COLORS.borderSoft,
+    borderRadius: 999,
+  },
+  skelLabel: {
+    height: 12, width: 100,
+    backgroundColor: COLORS.borderSoft,
+    borderRadius: 4,
+    marginBottom: 12,
+  },
+  skelLine: {
+    height: 12, width: '100%',
+    backgroundColor: COLORS.borderSoft,
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  creatingFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+  },
+  creatingFooterText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    flex: 1,
+    textAlign: 'left',
+  },
 });
