@@ -106,3 +106,18 @@ export const api = {
     request<T>('PUT', path, { ...options, body }),
   delete: <T>(path: string, options?: RequestOptions) => request<T>('DELETE', path, options),
 };
+
+// Standard backend response envelope (v2): { success, data, warnings, errors }.
+// readEnvelope normalises the shape so call sites don't have to repeat the
+// "is errors[0]?.hint here, or message, or just nothing?" dance.
+export function readEnvelope<T = any>(
+  res: any,
+): { ok: boolean; data?: T; hint?: string; warnings?: any[] } {
+  if (!res || typeof res !== 'object') return { ok: false, hint: 'Unexpected response.' };
+  return {
+    ok: !!res.success,
+    data: res.data,
+    hint: res.errors?.[0]?.hint || res.errors?.[0]?.message,
+    warnings: res.warnings,
+  };
+}

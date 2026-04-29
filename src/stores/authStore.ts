@@ -5,6 +5,12 @@ interface User {
   phone: string;
   name?: string;
   businessName?: string;
+  // businessDesc / industry / language are populated on first agent
+  // creation and re-used as established context for subsequent agents.
+  // Optional + nullable so partial profile responses don't break the type.
+  businessDesc?: string | null;
+  industry?: string | null;
+  language?: string | null;
   onboardingDone: boolean;
 }
 

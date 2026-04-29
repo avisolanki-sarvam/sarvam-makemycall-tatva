@@ -191,7 +191,7 @@ export default function VerifyOtpScreen() {
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={COLORS.textOnInk} />
           ) : (
             <Text style={styles.buttonText}>Verify</Text>
           )}
@@ -220,11 +220,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   content: { flex: 1, justifyContent: 'center', padding: 24 },
   backButton: { position: 'absolute', top: 60, left: 24 },
-  backText: { fontSize: 16, color: COLORS.primary, fontWeight: '600' },
-  title: { fontSize: 28, fontWeight: '800', color: COLORS.text, marginBottom: 8 },
-  subtitle: { fontSize: 15, color: COLORS.textSecondary, lineHeight: 22, marginBottom: 32 },
-  phoneHighlight: { fontWeight: '700', color: COLORS.text },
-  otpRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 32, gap: 8 },
+  backText: { fontSize: 14, color: COLORS.text, fontWeight: '500' },
+  title: { fontSize: 22, fontWeight: '500', color: COLORS.text, marginBottom: 8 },
+  subtitle: { fontSize: 14, color: COLORS.textSecondary, lineHeight: 14 * 1.55, marginBottom: 28 },
+  phoneHighlight: { fontWeight: '500', color: COLORS.text },
+  otpRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 28, gap: 8 },
   hiddenInput: {
     position: 'absolute',
     width: 1,
@@ -233,33 +233,39 @@ const styles = StyleSheet.create({
   },
   otpInput: {
     flex: 1,
-    height: 56,
+    height: 52,
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: COLORS.border,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: COLORS.borderSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   otpDigit: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '500',
     color: COLORS.text,
   },
-  otpInputFilled: { borderColor: COLORS.primary },
-  otpInputActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
+  otpInputFilled: { borderColor: COLORS.ink },
+  otpInputActive: { borderColor: COLORS.ink, backgroundColor: COLORS.primaryLight },
   button: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
+    backgroundColor: COLORS.ink,
+    borderRadius: 8,
+    paddingVertical: 13,
     alignItems: 'center',
   },
   buttonDisabled: { opacity: 0.7 },
-  buttonText: { color: COLORS.textOnInk, fontSize: 16, fontWeight: '700' },
-  resendText: { fontSize: 14, color: COLORS.primary, fontWeight: '600', textAlign: 'center', marginTop: 20 },
+  buttonText: { color: COLORS.textOnInk, fontSize: 14, fontWeight: '500' },
+  resendText: {
+    fontSize: 13,
+    color: COLORS.text,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 18,
+  },
   resendDisabled: { color: COLORS.textMuted },
   devHint: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.warning,
     textAlign: 'center',
     marginTop: 16,

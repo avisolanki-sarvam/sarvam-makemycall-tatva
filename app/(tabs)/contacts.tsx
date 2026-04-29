@@ -309,14 +309,14 @@ export default function ContactsScreen() {
               <View key={i} style={styles.kvRow}>
                 <TextInput
                   style={[styles.formInput, styles.kvKey]}
-                  placeholder="Field"
+                  placeholder="Kya (e.g. pending)"
                   placeholderTextColor={COLORS.textMuted}
                   value={row.key}
                   onChangeText={(t) => updateKvKey(i, t)}
                 />
                 <TextInput
                   style={[styles.formInput, styles.kvValue]}
-                  placeholder="Value"
+                  placeholder="Kitna (e.g. 1500)"
                   placeholderTextColor={COLORS.textMuted}
                   value={row.value}
                   onChangeText={(t) => updateKvValue(i, t)}
@@ -328,7 +328,7 @@ export default function ContactsScreen() {
             ))}
 
             <TouchableOpacity style={styles.addRowBtn} onPress={addKvRow}>
-              <Text style={styles.addRowBtnText}>+ Add another field</Text>
+              <Text style={styles.addRowBtnText}>+ Aur detail jodein</Text>
             </TouchableOpacity>
           </View>
 
@@ -491,48 +491,48 @@ export default function ContactsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  searchRow: { flexDirection: 'row', padding: 12, gap: 10 },
+  searchRow: { flexDirection: 'row', padding: 12, gap: 8 },
   searchInput: {
     flex: 1,
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: COLORS.borderSoft,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    fontSize: 15,
+    fontSize: 14,
     color: COLORS.text,
   },
   addBtn: {
-    width: 44,
-    height: 44,
-    backgroundColor: COLORS.primary,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    backgroundColor: COLORS.ink,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addBtnText: { color: COLORS.textOnInk, fontSize: 22, fontWeight: '600' },
+  addBtnText: { color: COLORS.textOnInk, fontSize: 20, fontWeight: '500' },
 
   iconBtn: {
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: COLORS.borderSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBtnText: { color: COLORS.text, fontSize: 22, fontWeight: '600', marginTop: -2 },
+  iconBtnText: { color: COLORS.text, fontSize: 20, fontWeight: '500', marginTop: -2 },
 
   addForm: {
     margin: 12,
     marginTop: 0,
     maxHeight: 460,
     backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: COLORS.borderSoft,
   },
   addFormInner: {
     padding: 14,
@@ -540,27 +540,27 @@ const styles = StyleSheet.create({
   },
   formInput: {
     backgroundColor: COLORS.background,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: COLORS.borderSoft,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    fontSize: 15,
+    fontSize: 14,
     color: COLORS.text,
   },
 
   section: { gap: 8, paddingTop: 4 },
-  sectionLabel: { fontSize: 13, fontWeight: '700', color: COLORS.text },
+  sectionLabel: { fontSize: 11, fontWeight: '500', color: COLORS.textMuted },
   sectionHint: { fontSize: 12, color: COLORS.textMuted, marginTop: -4 },
 
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: {
     backgroundColor: COLORS.primaryLight,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
     borderRadius: 999,
   },
-  chipText: { fontSize: 12, color: COLORS.text, fontWeight: '600' },
+  chipText: { fontSize: 11, color: COLORS.ink, fontWeight: '500' },
 
   kvRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   kvKey: { flex: 1 },
@@ -580,47 +580,47 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 4,
   },
-  addRowBtnText: { fontSize: 13, fontWeight: '600', color: COLORS.text },
+  addRowBtnText: { fontSize: 13, fontWeight: '500', color: COLORS.text },
 
   notesInput: { minHeight: 70, paddingTop: 10 },
 
   saveBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 10,
+    backgroundColor: COLORS.ink,
+    borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
     marginTop: 4,
   },
-  saveBtnText: { color: COLORS.textOnInk, fontWeight: '700', fontSize: 14 },
+  saveBtnText: { color: COLORS.textOnInk, fontWeight: '500', fontSize: 13 },
 
   list: { padding: 12, paddingTop: 0 },
   contactCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 12,
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 0.5,
+    borderColor: COLORS.borderSoft,
     gap: 12,
   },
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: COLORS.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: 17, fontWeight: '700', color: COLORS.primary },
+  avatarText: { fontSize: 16, fontWeight: '500', color: COLORS.ink },
   contactInfo: { flex: 1 },
-  contactName: { fontSize: 15, fontWeight: '600', color: COLORS.text },
-  contactPhone: { fontSize: 13, color: COLORS.textMuted, marginTop: 1 },
+  contactName: { fontSize: 14, fontWeight: '500', color: COLORS.text },
+  contactPhone: { fontSize: 12, color: COLORS.textMuted, marginTop: 1 },
 
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 6 },
-  emptySubtext: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', marginTop: 8 },
+  emptyTitle: { fontSize: 16, fontWeight: '500', color: COLORS.text, marginBottom: 6 },
+  emptySubtext: { fontSize: 13, color: COLORS.textSecondary, textAlign: 'center', marginTop: 8 },
 
   // ---- Phone-book import modal ----
   modalContainer: { flex: 1, backgroundColor: COLORS.background },
@@ -631,34 +631,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 56, // safe area-ish for now; replace with insets if a header lib is added
     paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.borderSoft,
     backgroundColor: COLORS.surface,
   },
-  modalTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text, flex: 1, textAlign: 'center' },
-  modalClose: { fontSize: 14, color: COLORS.textSecondary, width: 60 },
+  modalTitle: { fontSize: 14, fontWeight: '500', color: COLORS.text, flex: 1, textAlign: 'center' },
+  modalClose: { fontSize: 13, color: COLORS.textSecondary, width: 60 },
   modalCount: { fontSize: 12, color: COLORS.textMuted, width: 60, textAlign: 'right' },
 
   contactCardPicked: {
     backgroundColor: COLORS.primaryLight,
-    borderColor: COLORS.text,
+    borderColor: COLORS.ink,
   },
   check: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 0.5,
+    borderColor: COLORS.borderSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkPicked: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  checkMark: { color: COLORS.textOnInk, fontSize: 14, fontWeight: '800' },
+  checkPicked: { backgroundColor: COLORS.ink, borderColor: COLORS.ink },
+  checkMark: { color: COLORS.textOnInk, fontSize: 13, fontWeight: '500' },
 
   modalFooter: {
     padding: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopWidth: 0.5,
+    borderTopColor: COLORS.borderSoft,
     backgroundColor: COLORS.surface,
   },
   saveBtnDisabled: { opacity: 0.4 },
