@@ -9,9 +9,9 @@ export default function SettingsScreen() {
   const logout = useAuthStore((s) => s.logout);
 
   const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+    Alert.alert('Log out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', style: 'destructive', onPress: () => logout() },
+      { text: 'Log out', style: 'destructive', onPress: () => logout() },
     ]);
   };
 
@@ -48,14 +48,14 @@ export default function SettingsScreen() {
           icon="🤖"
           onPress={() => router.push('/profile-setup')}
         />
-        <MenuItem label="Credit History" icon="💳" />
-        <MenuItem label="Notification Preferences" icon="🔔" />
-        <MenuItem label="Help & Support" icon="❓" />
+        <MenuItem label="Credit history" icon="💳" />
+        <MenuItem label="Notification preferences" icon="🔔" />
+        <MenuItem label="Help and support" icon="❓" />
         <MenuItem label="About MakeMyCall" icon="ℹ️" />
       </View>
 
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Log Out</Text>
+        <Text style={styles.logoutText}>Log out</Text>
       </TouchableOpacity>
 
       <Text style={styles.version}>MakeMyCall v1.0.0</Text>
@@ -96,32 +96,32 @@ const styles = StyleSheet.create({
 
   profileCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 24,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 0.5,
+    borderColor: COLORS.borderSoft,
     marginBottom: 20,
   },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: COLORS.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
-  avatarText: { fontSize: 26, fontWeight: '700', color: COLORS.primary },
-  profileName: { fontSize: 20, fontWeight: '700', color: COLORS.text },
-  profilePhone: { fontSize: 14, color: COLORS.textSecondary, marginTop: 2 },
-  businessName: { fontSize: 14, color: COLORS.primary, fontWeight: '600', marginTop: 4 },
+  avatarText: { fontSize: 24, fontWeight: '500', color: COLORS.ink },
+  profileName: { fontSize: 18, fontWeight: '500', color: COLORS.text },
+  profilePhone: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
+  businessName: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '500', marginTop: 4 },
 
   menu: {
     backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: COLORS.borderSoft,
     overflow: 'hidden',
   },
   menuItem: {
@@ -129,23 +129,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.borderSoft,
     gap: 12,
   },
-  menuIcon: { fontSize: 18 },
-  menuLabel: { flex: 1, fontSize: 15, fontWeight: '500', color: COLORS.text },
+  menuIcon: { fontSize: 16 },
+  menuLabel: { flex: 1, fontSize: 14, fontWeight: '500', color: COLORS.text },
   menuLabelStub: { color: COLORS.textMuted, fontWeight: '400' },
-  menuArrow: { fontSize: 20, color: COLORS.textMuted },
+  menuArrow: { fontSize: 18, color: COLORS.textMuted },
 
   logoutBtn: {
     marginTop: 24,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1.5,
+    paddingVertical: 13,
+    borderRadius: 8,
+    borderWidth: 0.5,
     borderColor: COLORS.danger,
     alignItems: 'center',
   },
-  logoutText: { fontSize: 15, fontWeight: '700', color: COLORS.danger },
-  version: { fontSize: 12, color: COLORS.textMuted, textAlign: 'center', marginTop: 16 },
+  logoutText: { fontSize: 13, fontWeight: '500', color: COLORS.danger },
+  version: { fontSize: 11, color: COLORS.textMuted, textAlign: 'center', marginTop: 16 },
 });

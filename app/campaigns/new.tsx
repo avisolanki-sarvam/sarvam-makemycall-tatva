@@ -12,11 +12,12 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { COLORS } from '../../src/constants/api';
-import { api } from '../../src/services/api';
+import { api, readEnvelope } from '../../src/services/api';
 import { useContactStore, type Contact } from '../../src/stores/contactStore';
 import {
   useCampaignDraftStore,
   type ScheduleMode,
+  type AllowedWindow,
 } from '../../src/stores/campaignDraftStore';
 
 // Wizard steps. Spec §4.15 (pick agent) is skipped for v1 because the user
@@ -32,10 +33,25 @@ interface KVRow {
 
 const newRow = (): KVRow => ({ key: '', value: '' });
 
-// Server constrains schedule to 09:00–20:00 IST mon–sat. We don't
-// reimplement the timezone math on the client — instead we offer a small
-// set of chips that fall safely inside the window, plus rely on the 400
-// from POST /campaigns if anything slips through.
+// HH:MM 24h validator. Empty string is rejected (we always render with a
+// default seeded from the draft store).
+const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const isValidHHMM = (s: string) => HHMM_RE.test(s);
+
+// Agent-validate envelope shape. Mirrors the importer's local interface so
+// call sites don't need a shared types module for this one boolean.
+interface ValidateData {
+  valid: boolean;
+  agent?: { id: string; status: string; name: string };
+}
+
+interface LaunchData {
+  campaign?: { id: string };
+}
+
+// Tomorrow-at-hour helper for the "schedule for later" preset chips. Server
+// constrains the actual call window via allowedWindow; these chips are just
+// shortcuts for choosing a start time tomorrow.
 function tomorrowAt(hour: number): { iso: string; label: string } {
   const d = new Date();
   d.setDate(d.getDate() + 1);
@@ -70,6 +86,18 @@ export default function NewCampaignScreen() {
   const [agentId, setAgentId] = useState<string | null>(null);
   const [creditBalance, setCreditBalance] = useState<number>(0);
 
+  // Local-only mirror of the allowedWindow time inputs so we can validate
+  // HH:MM keystroke-by-keystroke without polluting the draft store with
+  // half-typed values. Committed to draft on blur.
+  const [startTimeText, setStartTimeText] = useState<string>(draft.allowedWindow.startTime);
+  const [endTimeText, setEndTimeText] = useState<string>(draft.allowedWindow.endTime);
+
+  // Pre-flight validate (fires once on review-step entry; mirrors importer).
+  const [validating, setValidating] = useState(false);
+  const [valid, setValid] = useState<boolean | null>(null);
+  const [validateError, setValidateError] = useState<string | null>(null);
+  const [validateErrorCode, setValidateErrorCode] = useState<string | null>(null);
+
   // Reset draft + load supporting data on first mount.
   useEffect(() => {
     draft.reset();
@@ -77,6 +105,13 @@ export default function NewCampaignScreen() {
     void bootstrap();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keep the local time-text mirrors in sync after a draft.reset().
+  useEffect(() => {
+    setStartTimeText(draft.allowedWindow.startTime);
+    setEndTimeText(draft.allowedWindow.endTime);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.allowedWindow.startTime, draft.allowedWindow.endTime]);
 
   const bootstrap = async () => {
     setLoading(true);
@@ -115,6 +150,42 @@ export default function NewCampaignScreen() {
     setStep(STEP_ORDER[stepIndex + 1]);
   };
 
+  // ------------------------------------------------------------------ Pre-flight validate
+  // Same shape as importer review: fire POST /agents/:id/validate once when
+  // we land on the review step. Result gates the launch CTA. We don't block
+  // the rest of the wizard on this — the user can still edit prior steps.
+  useEffect(() => {
+    if (step !== 'review' || !agentId) return;
+    let cancelled = false;
+    (async () => {
+      setValidating(true);
+      setValid(null);
+      setValidateError(null);
+      setValidateErrorCode(null);
+      try {
+        const raw = await api.post<any>(`/agents/${agentId}/validate`, {});
+        if (cancelled) return;
+        const env = readEnvelope<ValidateData>(raw);
+        if (env.ok && env.data?.valid) {
+          setValid(true);
+        } else {
+          setValid(false);
+          setValidateError(env.hint || raw?.errors?.[0]?.hint || 'Agent is not ready.');
+          setValidateErrorCode(raw?.errors?.[0]?.code || null);
+        }
+      } catch (err: any) {
+        if (cancelled) return;
+        setValid(false);
+        setValidateError(err?.message || 'Could not check agent status.');
+      } finally {
+        if (!cancelled) setValidating(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [step, agentId]);
+
   // ------------------------------------------------------------------ Launch
 
   const buildVarsObject = (): Record<string, string> => {
@@ -127,6 +198,14 @@ export default function NewCampaignScreen() {
     return out;
   };
 
+  // Same recovery taxonomy as the importer; codes come from
+  // api/services/Agent.js validateAgent. Keep in sync.
+  const RECREATE_CODES = useMemo(
+    () => new Set(['agent_no_phone', 'agent_variables_missing', 'agent_not_provisioned']),
+    [],
+  );
+  const showRecreate = !!validateErrorCode && RECREATE_CODES.has(validateErrorCode);
+
   const launch = async () => {
     if (!agentId) {
       Alert.alert('No assistant', 'Set up your AI assistant before launching a campaign.');
@@ -134,6 +213,11 @@ export default function NewCampaignScreen() {
     }
     if (draft.selectedContactIds.length === 0) {
       Alert.alert('No one to call', 'Pick at least one contact.');
+      return;
+    }
+    if (valid !== true) {
+      // Defensive — the CTA should already be disabled in this case.
+      Alert.alert('Assistant not ready', validateError || 'Please try again in a moment.');
       return;
     }
     const cost = draft.selectedContactIds.length;
@@ -147,21 +231,30 @@ export default function NewCampaignScreen() {
 
     setSubmitting(true);
     try {
+      const defaultVariables = buildVarsObject();
+      // Body shape matches POST /agents/:id/launch contract exactly.
+      // contactIds is preferred when we have selections from the address
+      // book, which is the only path this wizard takes.
       const payload: Record<string, any> = {
-        agentId,
         contactIds: draft.selectedContactIds,
-        variables: buildVarsObject(),
+        allowedWindow: draft.allowedWindow,
       };
+      if (Object.keys(defaultVariables).length > 0) {
+        payload.defaultVariables = defaultVariables;
+      }
       if (draft.scheduleMode === 'later' && draft.scheduledAt) {
         payload.scheduledAt = draft.scheduledAt;
       }
-      const res = await api.post<{ campaign: { id: string } }>('/campaigns', payload);
-      draft.reset();
-      router.replace(`/campaigns/${res.campaign.id}`);
+      const raw = await api.post<any>(`/agents/${agentId}/launch`, payload);
+      const env = readEnvelope<LaunchData>(raw);
+      if (env.ok && env.data?.campaign?.id) {
+        draft.reset();
+        router.replace(`/campaigns/${env.data.campaign.id}`);
+        return;
+      }
+      // 200 with success=false (insufficient credits, agent not ready, etc.)
+      Alert.alert('Could not launch', env.hint || 'Try again.');
     } catch (e: any) {
-      // 402 from server lands here. The api wrapper turns the body into
-      // .message via extractError; for the structured payload we still get
-      // a useful string.
       Alert.alert('Could not launch', e?.message || 'Try again.');
     } finally {
       setSubmitting(false);
@@ -255,6 +348,34 @@ export default function NewCampaignScreen() {
 
   // ------------------------------------------------------------------ Schedule step
 
+  // Time inputs commit to the draft on blur if and only if the value is a
+  // valid HH:MM string. Otherwise we revert the local mirror to what's in
+  // the store, so the user always sees a valid value when not focused.
+  const commitStartTime = () => {
+    if (isValidHHMM(startTimeText)) {
+      draft.patchAllowedWindow({ startTime: startTimeText });
+    } else {
+      setStartTimeText(draft.allowedWindow.startTime);
+    }
+  };
+  const commitEndTime = () => {
+    if (isValidHHMM(endTimeText)) {
+      draft.patchAllowedWindow({ endTime: endTimeText });
+    } else {
+      setEndTimeText(draft.allowedWindow.endTime);
+    }
+  };
+
+  // Gate the Next button on:
+  //   - if "later" picked, scheduledAt must be set
+  //   - both time inputs must be valid HH:MM
+  //   - end > start (string compare works for fixed-width HH:MM)
+  const scheduleStepReady =
+    isValidHHMM(startTimeText) &&
+    isValidHHMM(endTimeText) &&
+    startTimeText < endTimeText &&
+    !(draft.scheduleMode === 'later' && !draft.scheduledAt);
+
   const renderScheduleStep = () => (
     <ScrollView contentContainerStyle={styles.contentPad}>
       {renderHeader('When should I call?')}
@@ -271,7 +392,7 @@ export default function NewCampaignScreen() {
       <RadioRow
         active={draft.scheduleMode === 'later'}
         title="Schedule for later"
-        subtitle="Pick a time within calling hours (09:00–20:00 IST, Mon–Sat)"
+        subtitle="Pick a start time"
         onPress={() => draft.setScheduleMode('later')}
       />
 
@@ -296,14 +417,64 @@ export default function NewCampaignScreen() {
         </View>
       )}
 
+      {/* Allowed-window — call timing window. Hardcoded Asia/Kolkata + a
+          single weekday (today's by default; backend accepts up to all 7).
+          The day picker is intentionally minimal for v1 — most customers run
+          the whole campaign in one sitting. */}
+      <View style={styles.windowBlock}>
+        <Text style={styles.windowLabelHi}>Call timing window</Text>
+        <Text style={styles.windowLabelEn}>Calls go out only between these times</Text>
+        <View style={styles.timeRow}>
+          <View style={styles.timeField}>
+            <Text style={styles.timeFieldLabel}>From / Se</Text>
+            <TextInput
+              style={[
+                styles.timeInput,
+                !isValidHHMM(startTimeText) && styles.timeInputInvalid,
+              ]}
+              value={startTimeText}
+              onChangeText={setStartTimeText}
+              onBlur={commitStartTime}
+              placeholder="11:00"
+              placeholderTextColor={COLORS.textMuted}
+              keyboardType="numbers-and-punctuation"
+              maxLength={5}
+              autoCorrect={false}
+            />
+          </View>
+          <View style={styles.timeField}>
+            <Text style={styles.timeFieldLabel}>To / Tak</Text>
+            <TextInput
+              style={[
+                styles.timeInput,
+                !isValidHHMM(endTimeText) && styles.timeInputInvalid,
+              ]}
+              value={endTimeText}
+              onChangeText={setEndTimeText}
+              onBlur={commitEndTime}
+              placeholder="19:00"
+              placeholderTextColor={COLORS.textMuted}
+              keyboardType="numbers-and-punctuation"
+              maxLength={5}
+              autoCorrect={false}
+            />
+          </View>
+        </View>
+        <Text style={styles.windowHint}>
+          Time format: 24h, HH:MM. Timezone: Asia/Kolkata.
+        </Text>
+        {isValidHHMM(startTimeText) &&
+          isValidHHMM(endTimeText) &&
+          startTimeText >= endTimeText && (
+            <Text style={styles.windowError}>End time must be after start time.</Text>
+          )}
+      </View>
+
       <View style={[styles.footer, { marginTop: 24 }]}>
         <View />
         <TouchableOpacity
-          style={[
-            styles.primaryBtn,
-            draft.scheduleMode === 'later' && !draft.scheduledAt && styles.btnDisabled,
-          ]}
-          disabled={draft.scheduleMode === 'later' && !draft.scheduledAt}
+          style={[styles.primaryBtn, !scheduleStepReady && styles.btnDisabled]}
+          disabled={!scheduleStepReady}
           onPress={goNext}
         >
           <Text style={styles.primaryBtnText}>Next — variables</Text>
@@ -370,6 +541,16 @@ export default function NewCampaignScreen() {
 
   // ------------------------------------------------------------------ Review step
 
+  const formatAllowedWindow = (w: AllowedWindow): string => {
+    const days =
+      w.days.length === 7
+        ? 'Every day'
+        : w.days.length === 0
+          ? '—'
+          : w.days.join(', ');
+    return `${w.startTime}–${w.endTime} ${w.timezone}  •  ${days}`;
+  };
+
   const renderReviewStep = () => {
     const cost = draft.selectedContactIds.length;
     const balanceAfter = creditBalance - cost;
@@ -384,12 +565,20 @@ export default function NewCampaignScreen() {
           ? new Date(draft.scheduledAt).toLocaleString()
           : 'Later (no time picked)';
 
+    const launchDisabled =
+      submitting ||
+      validating ||
+      valid !== true ||
+      balanceAfter < 0 ||
+      draft.selectedContactIds.length === 0;
+
     return (
       <ScrollView contentContainerStyle={styles.contentPad}>
         {renderHeader('Ready to call?')}
 
         <SummaryRow label="AI assistant" value={agentName || '—'} />
         <SummaryRow label="When" value={scheduleLabel} />
+        <SummaryRow label="Call window" value={formatAllowedWindow(draft.allowedWindow)} />
         <SummaryRow
           label="Who"
           value={`${selected.length} contact${selected.length === 1 ? '' : 's'}: ${selected.slice(0, 3).join(', ')}${selected.length > 3 ? `, +${selected.length - 3} more` : ''}`}
@@ -411,16 +600,65 @@ export default function NewCampaignScreen() {
           </Text>
         </View>
 
+        {/* Validate banner — surfaces when the agent isn't callable. Mirrors
+            the importer's banner: warm hint copy + recovery link. While the
+            banner is up, the launch CTA below stays disabled. */}
+        {valid === false && validateError ? (
+          <View style={styles.validateBanner}>
+            <Text style={styles.validateBannerText}>{validateError}</Text>
+            <TouchableOpacity
+              style={styles.validateRetryBtn}
+              onPress={() => {
+                if (showRecreate && agentId) {
+                  router.push(`/agent-preview/${agentId}`);
+                } else {
+                  // Soft re-fire: bounce out and back into review. The
+                  // step-change effect re-runs validate.
+                  setStep('variables');
+                  setTimeout(() => setStep('review'), 30);
+                }
+              }}
+            >
+              <Text style={styles.validateRetryText}>
+                {showRecreate ? 'Re-create' : 'Try again'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {/* PRIMARY: bilingual stacked launch CTA. Matches importer pattern. */}
         <TouchableOpacity
-          style={[styles.primaryBtn, (submitting || balanceAfter < 0) && styles.btnDisabled]}
-          disabled={submitting || balanceAfter < 0}
+          style={[styles.cta, launchDisabled && styles.ctaDisabled]}
+          disabled={launchDisabled}
           onPress={launch}
+          activeOpacity={0.85}
         >
           {submitting ? (
             <ActivityIndicator color={COLORS.textOnInk} />
+          ) : validating ? (
+            <View style={{ alignItems: 'center' }}>
+              <Text style={styles.ctaTextHi}>Checking…</Text>
+              <Text style={styles.ctaTextEn}>Verifying agent</Text>
+            </View>
           ) : (
-            <Text style={styles.primaryBtnText}>Launch calls</Text>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={styles.ctaTextHi}>Launch karein</Text>
+              <Text style={styles.ctaTextEn}>Launch campaign</Text>
+            </View>
           )}
+        </TouchableOpacity>
+
+        {/* SECONDARY: outlined "Edit" — bounces back to step 1 so the user
+            can revise contacts / schedule / variables. */}
+        <TouchableOpacity
+          style={styles.secondaryCta}
+          onPress={() => setStep('contacts')}
+          activeOpacity={0.85}
+        >
+          <View style={{ alignItems: 'center' }}>
+            <Text style={styles.secondaryCtaTextHi}>Badlein</Text>
+            <Text style={styles.secondaryCtaTextEn}>Edit</Text>
+          </View>
         </TouchableOpacity>
       </ScrollView>
     );
@@ -507,23 +745,23 @@ const styles = StyleSheet.create({
   center: { justifyContent: 'center', alignItems: 'center', padding: 24 },
   header: { padding: 16, paddingTop: 56, paddingBottom: 12 },
   backBtn: { alignSelf: 'flex-start', paddingVertical: 4, marginBottom: 6 },
-  backTxt: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '600' },
+  backTxt: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '500' },
   stepIndicator: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '500',
     color: COLORS.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: 6,
   },
-  title: { fontSize: 24, fontWeight: '800', color: COLORS.text, marginTop: 4 },
+  title: { fontSize: 22, fontWeight: '500', color: COLORS.text, marginTop: 4 },
   hint: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 14, lineHeight: 18 },
 
   searchRow: { paddingHorizontal: 16, paddingBottom: 8 },
   searchInput: {
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 10,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -535,10 +773,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 12,
     marginBottom: 8,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     gap: 12,
   },
@@ -551,21 +789,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: 15, fontWeight: '700', color: COLORS.primary },
-  contactName: { fontSize: 15, fontWeight: '600', color: COLORS.text },
+  avatarText: { fontSize: 15, fontWeight: '500', color: COLORS.primary },
+  contactName: { fontSize: 15, fontWeight: '500', color: COLORS.text },
   contactSub: { fontSize: 12.5, color: COLORS.textMuted, marginTop: 2 },
 
   check: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    borderWidth: 1.5,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkPicked: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  checkMark: { color: COLORS.textOnInk, fontSize: 14, fontWeight: '800' },
+  checkMark: { color: COLORS.textOnInk, fontSize: 14, fontWeight: '500' },
 
   footer: {
     flexDirection: 'row',
@@ -573,31 +811,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     backgroundColor: COLORS.surface,
-    borderTopWidth: 1,
+    borderTopWidth: 0.5,
     borderTopColor: COLORS.border,
   },
-  footerSummary: { fontSize: 14, fontWeight: '600', color: COLORS.text },
+  footerSummary: { fontSize: 14, fontWeight: '500', color: COLORS.text },
   primaryBtn: {
     backgroundColor: COLORS.primary,
-    borderRadius: 12,
+    borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 20,
     alignItems: 'center',
     minWidth: 160,
   },
-  primaryBtnText: { color: COLORS.textOnInk, fontWeight: '700', fontSize: 14 },
+  primaryBtnText: { color: COLORS.textOnInk, fontWeight: '500', fontSize: 14 },
   btnDisabled: { opacity: 0.4 },
 
   emptyBlock: { padding: 32, alignItems: 'center' },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 6 },
+  emptyTitle: { fontSize: 18, fontWeight: '500', color: COLORS.text, marginBottom: 6 },
   emptyText: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center' },
 
   radio: {
     flexDirection: 'row',
     backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 14,
-    borderWidth: 1.5,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     marginBottom: 10,
     gap: 12,
@@ -608,7 +846,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: COLORS.border,
     marginTop: 1,
     alignItems: 'center',
@@ -616,28 +854,63 @@ const styles = StyleSheet.create({
   },
   dotActive: { borderColor: COLORS.text },
   dotInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.text },
-  radioTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
+  radioTitle: { fontSize: 15, fontWeight: '500', color: COLORS.text, marginBottom: 2 },
   radioSub: { fontSize: 12.5, color: COLORS.textSecondary, lineHeight: 17 },
 
   presetWrap: { paddingTop: 6 },
-  presetLabel: { fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 8 },
+  presetLabel: { fontSize: 13, fontWeight: '500', color: COLORS.text, marginBottom: 8 },
   presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   preset: {
     backgroundColor: COLORS.surface,
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderWidth: 1.5,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
   },
   presetActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.text },
-  presetText: { fontSize: 13, color: COLORS.text, fontWeight: '600' },
+  presetText: { fontSize: 13, color: COLORS.text, fontWeight: '500' },
   presetTextActive: { color: COLORS.text },
+
+  // Allowed-window block — sits below the schedule radios.
+  windowBlock: {
+    marginTop: 18,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+    padding: 14,
+  },
+  windowLabelHi: { fontSize: 14, fontWeight: '500', color: COLORS.text },
+  windowLabelEn: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2, marginBottom: 12 },
+  timeRow: { flexDirection: 'row', gap: 10 },
+  timeField: { flex: 1 },
+  timeFieldLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 4,
+  },
+  timeInput: {
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: COLORS.text,
+  },
+  timeInputInvalid: { borderColor: COLORS.danger },
+  windowHint: { fontSize: 11, color: COLORS.textMuted, marginTop: 10 },
+  windowError: { fontSize: 12, color: COLORS.danger, marginTop: 6 },
 
   input: {
     backgroundColor: COLORS.surface,
     borderRadius: 10,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -654,19 +927,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   kvRemoveTxt: { fontSize: 18, color: COLORS.textSecondary, marginTop: -2 },
-  linkTxt: { fontSize: 14, fontWeight: '600', color: COLORS.text, paddingVertical: 6 },
+  linkTxt: { fontSize: 14, fontWeight: '500', color: COLORS.text, paddingVertical: 6 },
 
   summaryRow: {
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 14,
     marginBottom: 10,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
   },
   summaryLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '500',
     color: COLORS.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -676,16 +949,84 @@ const styles = StyleSheet.create({
 
   costCard: {
     backgroundColor: COLORS.primaryLight,
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 16,
     marginVertical: 16,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
   },
   costLine: { fontSize: 15, color: COLORS.text },
-  costBig: { fontWeight: '800', fontSize: 16 },
+  costBig: { fontWeight: '500', fontSize: 16 },
   costSub: { fontSize: 13, color: COLORS.textSecondary, marginTop: 6 },
-  costBigSecondary: { fontWeight: '700', color: COLORS.text },
+  costBigSecondary: { fontWeight: '500', color: COLORS.text },
+
+  // Bilingual stacked CTAs — match importer review styles exactly.
+  cta: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.ink,
+    borderRadius: 8,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 18,
+  },
+  ctaDisabled: { opacity: 0.4 },
+  ctaTextHi: { color: COLORS.textOnInk, fontSize: 13, fontWeight: '500' },
+  ctaTextEn: {
+    color: COLORS.textOnInk,
+    fontSize: 11,
+    fontWeight: '400',
+    marginTop: 2,
+    opacity: 0.7,
+  },
+
+  secondaryCta: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: COLORS.borderSoft,
+    paddingVertical: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  secondaryCtaTextHi: {
+    color: COLORS.ink,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  secondaryCtaTextEn: {
+    color: COLORS.textSecondary,
+    fontSize: 10,
+    fontWeight: '400',
+    marginTop: 2,
+    opacity: 0.85,
+  },
+
+  // Validate banner — same warm-hint pattern as the importer.
+  validateBanner: {
+    backgroundColor: COLORS.statusDeclinedBg,
+    borderRadius: 8,
+    padding: 14,
+    marginTop: 18,
+    gap: 10,
+  },
+  validateBannerText: {
+    fontSize: 12,
+    color: COLORS.statusDeclinedFg,
+    lineHeight: 18,
+  },
+  validateRetryBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+  },
+  validateRetryText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.statusDeclinedFg,
+    textDecorationLine: 'underline',
+  },
 
   errorTxt: { fontSize: 14, color: COLORS.danger, textAlign: 'center', marginBottom: 16 },
 });

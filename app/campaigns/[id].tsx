@@ -1,3 +1,14 @@
+// TODO(visual-refresh): The April 2026 mockups specify a leaner "Calling-now"
+// header for this screen — 3 stat cards (Done / Ringing / Queued) + a status
+// list with dot prefixes + "View full report" outlined CTA. The current screen
+// serves a broader purpose (post-launch detail AND historical browsing from
+// /history/[id]), so it includes a 4-up KPI row, per-call rows with avatars +
+// outcome chips + duration, a credits line, cancel link, and click-through to
+// per-call detail. A pure mockup port would lose the historical-browsing
+// affordances. Plan: split into a transient `CallingNowHeader` (rendered while
+// status is `scheduling` or `active`) and the existing `CampaignSummary`
+// header (rendered once status hits a terminal state). Tracked separately —
+// out of scope for the importer rewire PR.
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
@@ -146,6 +157,7 @@ export default function CampaignDetailScreen() {
 
   const k = campaign.kpis;
   const cancellable = campaign.status === 'scheduled' || campaign.status === 'active';
+  const isLive = campaign.status === 'scheduling' || campaign.status === 'active';
 
   return (
     <View style={styles.container}>
@@ -160,6 +172,7 @@ export default function CampaignDetailScreen() {
               <Text style={styles.backTxt}>← Back</Text>
             </TouchableOpacity>
             <Text style={styles.title}>{campaign.name}</Text>
+            {isLive && <CallingNowHeader campaign={campaign} calls={calls} />}
             <Text style={styles.subtitle}>
               {campaign.status === 'completed'
                 ? 'Done'
@@ -237,6 +250,116 @@ function Kpi({ label, value, bg, fg }: { label: string; value: number; bg: strin
     <View style={[styles.kpi, { backgroundColor: bg }]}>
       <Text style={[styles.kpiNum, { color: fg }]}>{value}</Text>
       <Text style={[styles.kpiLabel, { color: fg }]}>{label}</Text>
+    </View>
+  );
+}
+
+/**
+ * Transient banner shown only while a campaign is in flight (status =
+ * `scheduling` | `active`). Unmounts once the campaign reaches a terminal
+ * state, letting the existing summary view take over for historical browsing.
+ *
+ * Counts are derived from the `calls` rows we already fetch:
+ *   - Done    : connectivityStatus === 'connected' || completionStatus is set
+ *   - Ringing : has been attempted but not yet completed
+ *   - Queued  : no attempt yet (no row, or row with no connectivityStatus)
+ */
+function CallingNowHeader({
+  campaign,
+  calls,
+}: {
+  campaign: CampaignDetail;
+  calls: CallRow[];
+}) {
+  const total = campaign.totalContacts || campaign.kpis.total || 0;
+
+  // A call row exists per attempted contact. Anything without a row is queued.
+  const done = calls.filter(
+    (c) => c.connectivityStatus === 'connected' || !!c.completionStatus,
+  ).length;
+  const ringing = calls.filter(
+    (c) => c.connectivityStatus !== 'connected' && !c.completionStatus,
+  ).length;
+  const queued = Math.max(0, total - done - ringing);
+
+  // Most-recent first; newest attempts surface at the top.
+  const sorted = [...calls].sort((a, b) => {
+    const at = a.calledAt ? new Date(a.calledAt).getTime() : 0;
+    const bt = b.calledAt ? new Date(b.calledAt).getTime() : 0;
+    return bt - at;
+  });
+  const VISIBLE_CAP = 10;
+  const visible = sorted.slice(0, VISIBLE_CAP);
+  const hiddenCount = Math.max(0, sorted.length - visible.length);
+
+  return (
+    <View style={styles.cnh}>
+      {/* Pulse strip */}
+      <View style={styles.cnhPulseRow}>
+        <View style={styles.cnhPulseDot} />
+        <Text style={styles.cnhPulseTxt}>
+          Calling {total} logon ko · {done} done · {ringing} ringing
+        </Text>
+      </View>
+
+      {/* Stat cards */}
+      <View style={styles.cnhStatRow}>
+        <CnhStat label="Done" value={done} fg={COLORS.success} />
+        <CnhStat label="Ringing" value={ringing} fg={COLORS.warning} />
+        <CnhStat label="Queued" value={queued} fg={COLORS.textMuted} />
+      </View>
+
+      {/* Per-contact status list */}
+      {visible.length > 0 && (
+        <View style={styles.cnhList}>
+          {visible.map((c) => (
+            <CnhRow key={c.id} call={c} />
+          ))}
+          {hiddenCount > 0 && (
+            <Text style={styles.cnhViewAll}>View all {sorted.length} below</Text>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function CnhStat({ label, value, fg }: { label: string; value: number; fg: string }) {
+  return (
+    <View style={styles.cnhStat}>
+      <Text style={[styles.cnhStatNum, { color: fg }]}>{value}</Text>
+      <Text style={styles.cnhStatLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function CnhRow({ call }: { call: CallRow }) {
+  // Map row state to a dot colour + bilingual-leaning label.
+  let dot = COLORS.textMuted;
+  let label = 'Queued';
+  if (call.connectivityStatus === 'connected' || call.completionStatus) {
+    dot = COLORS.success;
+    label = 'Connected';
+  } else if (
+    call.connectivityStatus === 'no_answer' ||
+    call.connectivityStatus === 'busy'
+  ) {
+    dot = COLORS.textMuted;
+    label = call.connectivityStatus === 'busy' ? 'Busy' : 'No answer';
+  } else if (call.connectivityStatus === 'failed') {
+    dot = COLORS.danger;
+    label = 'Failed';
+  } else if (call.calledAt) {
+    dot = COLORS.warning;
+    label = 'Ringing';
+  }
+  return (
+    <View style={styles.cnhRow}>
+      <View style={[styles.cnhDot, { backgroundColor: dot }]} />
+      <Text style={styles.cnhRowName} numberOfLines={1}>
+        {call.contactName || call.contactPhone || 'Unknown'}
+      </Text>
+      <Text style={[styles.cnhRowTag, { color: dot }]}>{label}</Text>
     </View>
   );
 }
@@ -338,4 +461,86 @@ const styles = StyleSheet.create({
 
   errorTxt: { fontSize: 14, color: COLORS.danger, marginBottom: 16 },
   linkTxt: { fontSize: 14, fontWeight: '600', color: COLORS.text, paddingVertical: 6 },
+
+  // CallingNowHeader — transient, only while status is scheduling/active.
+  cnh: {
+    marginTop: 12,
+    paddingTop: 10,
+    paddingBottom: 4,
+    borderTopWidth: 0.5,
+    borderTopColor: COLORS.border,
+  },
+  cnhPulseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  cnhPulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.warning,
+  },
+  cnhPulseTxt: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    flex: 1,
+  },
+  cnhStatRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  cnhStat: {
+    flex: 1,
+    backgroundColor: COLORS.statusMuteBg,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cnhStatNum: {
+    fontSize: 19,
+    fontWeight: '500',
+  },
+  cnhStatLabel: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    marginTop: 1,
+  },
+  cnhList: {
+    marginTop: 12,
+    borderTopWidth: 0.5,
+    borderTopColor: COLORS.border,
+    paddingTop: 8,
+  },
+  cnhRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.borderSoft,
+  },
+  cnhDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  cnhRowName: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.text,
+  },
+  cnhRowTag: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  cnhViewAll: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    paddingVertical: 8,
+    textAlign: 'center',
+  },
 });
