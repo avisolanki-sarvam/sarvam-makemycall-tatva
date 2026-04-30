@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MakeMyCall · Tatva migration tracker</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-primary: #fafafa;
+    --surface-secondary: #ffffff;
+    --background-secondary: #f5f5f5;
+    --content-primary: #141414;
+    --content-secondary: #666666;
+    --content-tertiary: #999999;
+    --content-quaternary: #b3b3b3;
+    --border-primary: #f0f0f0;
+    --border-secondary: #e6e6e6;
+    --indigo-bg: #e8effc;
+    --indigo: #3333cc;
+    --positive-bg: #f2f8eb;
+    --positive: #385418;
+    --warning-bg: #fff8e6;
+    --warning: #a27224;
+    --danger-bg: #fde7e2;
+    --danger: #b81514;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    color: var(--content-primary);
+    background: var(--surface-primary);
+    padding: 24px 32px 48px;
+    line-height: 1.5;
+  }
+  .max { max-width: 1100px; margin: 0 auto; }
+
+  header.page {
+    display: flex; align-items: center; gap: 14px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border-secondary);
+    margin-bottom: 24px;
+  }
+  .brand-tile {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    background: var(--indigo);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 16px;
+  }
+  .h1 { font-size: 20px; font-weight: 700; margin: 0; }
+  .h1-sub { font-size: 13px; color: var(--content-secondary); margin: 2px 0 0; }
+
+  /* Progress strip */
+  .progress {
+    display: flex; gap: 10px;
+    margin: 0 0 24px;
+    padding: 0;
+    list-style: none;
+  }
+  .progress li {
+    flex: 1;
+    padding: 12px 14px;
+    background: var(--surface-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 12px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .progress .lbl {
+    font-size: 10px; color: var(--content-tertiary); letter-spacing: 0.5px;
+    text-transform: uppercase; font-weight: 600;
+  }
+  .progress .v { font-size: 18px; font-weight: 700; line-height: 1; }
+  .progress .done .v { color: var(--positive); }
+  .progress .pending .v { color: var(--warning); }
+  .progress .blocked .v { color: var(--danger); }
+
+  /* Section card */
+  .card {
+    background: var(--surface-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 16px;
+    padding: 20px 22px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 14px;
+    margin: 0 0 4px;
+    font-weight: 700;
+    color: var(--content-primary);
+    letter-spacing: 0.3px;
+  }
+  .card .sub { font-size: 12px; color: var(--content-tertiary); margin: 0 0 16px; }
+
+  /* Step rows */
+  .steps { list-style: none; padding: 0; margin: 0; }
+  .step {
+    display: flex; gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-primary);
+    align-items: flex-start;
+  }
+  .step:last-child { border-bottom: none; }
+  .step .num {
+    flex-shrink: 0;
+    width: 24px; height: 24px;
+    border-radius: 9999px;
+    border: 1px solid var(--border-secondary);
+    background: var(--background-secondary);
+    color: var(--content-secondary);
+    font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step.done .num {
+    background: var(--positive-bg);
+    border-color: transparent;
+    color: var(--positive);
+  }
+  .step.done .num::after { content: '✓'; }
+  .step.done .num span { display: none; }
+  .step .body { flex: 1; min-width: 0; }
+  .step .label { font-size: 14px; font-weight: 600; color: var(--content-primary); margin: 0 0 2px; }
+  .step.done .label { color: var(--content-secondary); text-decoration: line-through; text-decoration-color: var(--border-secondary); }
+  .step .desc { font-size: 12px; color: var(--content-tertiary); margin: 0; line-height: 1.5; }
+  .step pre {
+    margin: 8px 0 0;
+    background: var(--background-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    color: var(--content-primary);
+    overflow-x: auto;
+    white-space: pre;
+    line-height: 1.5;
+  }
+
+  /* File table */
+  table.files {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  table.files th, table.files td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-primary);
+    vertical-align: top;
+  }
+  table.files th {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--content-tertiary);
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border-secondary);
+  }
+  table.files td.path {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: var(--content-primary);
+    white-space: nowrap;
+  }
+  table.files td .why {
+    color: var(--content-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  /* Tag pill */
+  .tag {
+    display: inline-flex; align-items: center;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+  .tag.new { background: var(--positive-bg); color: var(--positive); }
+  .tag.edit { background: var(--indigo-bg); color: var(--indigo); }
+  .tag.unchanged { background: var(--background-secondary); color: var(--content-secondary); }
+  .tag.preview { background: var(--warning-bg); color: var(--warning); }
+
+  /* Checklist (interactive) */
+  .checklist { list-style: none; padding: 0; margin: 0; }
+  .checklist li {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--border-primary);
+  }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist input[type="checkbox"] {
+    margin: 3px 0 0;
+    width: 16px; height: 16px;
+    accent-color: var(--indigo);
+  }
+  .checklist label {
+    flex: 1;
+    font-size: 13px;
+    color: var(--content-primary);
+    line-height: 1.5;
+    cursor: pointer;
+  }
+  .checklist label .small {
+    display: block;
+    color: var(--content-tertiary);
+    font-size: 11px;
+    margin-top: 2px;
+  }
+  .checklist li.done label { color: var(--content-tertiary); text-decoration: line-through; text-decoration-color: var(--border-secondary); }
+
+  /* Decision callouts */
+  .callout {
+    display: flex; gap: 12px;
+    background: var(--indigo-bg);
+    border: 1px solid var(--indigo);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin: 0 0 16px;
+  }
+  .callout .ico {
+    flex-shrink: 0;
+    width: 24px; height: 24px;
+    border-radius: 6px;
+    background: var(--indigo);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .callout .body { font-size: 13px; color: var(--content-primary); line-height: 1.55; }
+  .callout strong { color: var(--indigo); }
+
+  /* Two columns */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 880px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .footer-note {
+    margin-top: 24px;
+    text-align: center;
+    color: var(--content-tertiary);
+    font-size: 11px;
+  }
+
+  a { color: var(--indigo); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="max">
+
+<header class="page">
+  <div class="brand-tile">M</div>
+  <div>
+    <h1 class="h1">MakeMyCall &middot; Tatva migration</h1>
+    <p class="h1-sub">Replacing the editorial cream/ink palette with Tatva tokens. Folder: <code>sarvam-makemycall-tatva</code></p>
+  </div>
+</header>
+
+<!-- Progress strip -->
+<ul class="progress" id="progress">
+  <li class="done"><span class="lbl">Files written</span><span class="v" id="p-written">8</span></li>
+  <li class="done"><span class="lbl">TS errors</span><span class="v" id="p-ts">0</span></li>
+  <li class="pending"><span class="lbl">Ship steps left</span><span class="v" id="p-left">5</span></li>
+  <li><span class="lbl">Branch state</span><span class="v" style="font-size:13px;">forked, untested on device</span></li>
+</ul>
+
+<!-- ───────────────────────────── -->
+<div class="card">
+  <h2>What this migration does</h2>
+  <p class="sub">Three tabs (Home / Campaigns / Settings) and the tab bar redesigned end-to-end against the Tatva token set, modelled after the CollectPay reference UX.</p>
+
+  <div class="grid-2">
+    <div>
+      <p style="font-size:13px; font-weight:600; margin: 0 0 6px;">Visual rules locked in</p>
+      <ul style="font-size:13px; color: var(--content-secondary); margin: 0; padding-left: 18px; line-height: 1.6;">
+        <li>White surfaces (<code>#fafafa</code> page, <code>#ffffff</code> cards), no shadows on cards</li>
+        <li>Indigo (<code>#3333cc</code>) only on brand tile, wallet pill, active tab</li>
+        <li>Green only on FAB and "Done" status pill</li>
+        <li>Red only on real "pending/failed" numeric tints</li>
+        <li>Settings rows: monochrome icon squares, label-over-value pattern</li>
+        <li>Phosphor regular weight (1.5px), constant in both tab states &mdash; colour alone signals active</li>
+      </ul>
+    </div>
+    <div>
+      <p style="font-size:13px; font-weight:600; margin: 0 0 6px;">Out of scope (untouched)</p>
+      <ul style="font-size:13px; color: var(--content-secondary); margin: 0; padding-left: 18px; line-height: 1.6;">
+        <li>Auth flow (login, OTP, profile-setup)</li>
+        <li>Contacts, agents, campaign wizard, call detail screens</li>
+        <li>Native (android/, ios/) build configs</li>
+        <li>Backend API contracts (no shape changes)</li>
+        <li>Auth store, services/api.ts, contactImport.ts</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ───────────────────────────── -->
+<div class="card">
+  <h2>File-by-file change map</h2>
+  <p class="sub">Eight files written. The rest of the codebase keeps importing <code>COLORS</code> from <code>src/constants/api</code> &mdash; that file now re-exports from the new <code>theme.ts</code>, so unmigrated screens render in the new palette automatically.</p>
+
+  <table class="files">
+    <thead>
+      <tr><th>Status</th><th>Path</th><th>Why</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="tag new">NEW</span></td>
+        <td class="path">src/constants/theme.ts</td>
+        <td class="why">All Tatva tokens for RN: <code>TatvaColors</code>, <code>Spacing</code>, <code>Radius</code>, <code>Type</code>, <code>Shadow</code>, <code>StatusToTatva</code>. Pulled directly from <code>tatva.sarvam.ai</code> Storybook CSS variables.</td>
+      </tr>
+      <tr>
+        <td><span class="tag new">NEW</span></td>
+        <td class="path">src/types/phosphor-react-native.d.ts</td>
+        <td class="why">Ambient module stub so <code>tsc</code> resolves Phosphor imports before <code>npm install</code>. Real types take over once installed; this file becomes redundant and can be deleted.</td>
+      </tr>
+      <tr>
+        <td><span class="tag edit">EDIT</span></td>
+        <td class="path">src/constants/api.ts</td>
+        <td class="why">Re-exports <code>COLORS</code> from <code>theme.ts</code>. Old key names kept (<code>primary</code>, <code>surface</code>, <code>ink</code>, <code>statusCommittedBg</code>, …) so no other screen needs to change.</td>
+      </tr>
+      <tr>
+        <td><span class="tag edit">EDIT</span></td>
+        <td class="path">app/(tabs)/_layout.tsx</td>
+        <td class="why">Phosphor (House / Users / Megaphone / Gear) replaces emoji. Active = indigo, inactive = grey. Constant icon weight in both states &mdash; no more press-shrink.</td>
+      </tr>
+      <tr>
+        <td><span class="tag edit">EDIT</span></td>
+        <td class="path">app/(tabs)/index.tsx</td>
+        <td class="why">Restrained Home: brand bar + wallet pill, single-line greeting, split summary card (calls today / pending), agent cards stripped of description, neutral "Start campaign" CTA per card, green FAB.</td>
+      </tr>
+      <tr>
+        <td><span class="tag edit">EDIT</span></td>
+        <td class="path">app/(tabs)/history.tsx</td>
+        <td class="why">CollectPay-parity Campaigns: 4-cell stat bar (TOTAL / COMPLETED / PENDING / PROCESSING), neutral megaphone tile per card, KPI line (Sent / Connected / Pending), credits-used footer.</td>
+      </tr>
+      <tr>
+        <td><span class="tag edit">EDIT</span></td>
+        <td class="path">app/(tabs)/settings.tsx</td>
+        <td class="why">Label-over-value rows, monochrome icon squares (the WhatsApp row keeps green &mdash; the only intentional accent). Profile card simplified: avatar, name, phone.</td>
+      </tr>
+      <tr>
+        <td><span class="tag edit">EDIT</span></td>
+        <td class="path">package.json</td>
+        <td class="why">Adds <code>phosphor-react-native@^3.0.6</code> (latest) + <code>react-native-svg@15.13.0</code> (Expo SDK 54 pin). No other dependency drift.</td>
+      </tr>
+      <tr>
+        <td><span class="tag preview">PREVIEW</span></td>
+        <td class="path">MOCKUP.html</td>
+        <td class="why">Static visual reference of the redesigned screens. Not shipped &mdash; safe to delete before the merge.</td>
+      </tr>
+      <tr>
+        <td><span class="tag unchanged">UNCHANGED</span></td>
+        <td class="path">app/(auth)/* &middot; app/agents/* &middot; app/campaigns/* &middot; app/contacts/* &middot; src/stores/* &middot; src/services/*</td>
+        <td class="why">Pick up new colours via the <code>COLORS</code> shim. Visual review on a device may flag a few that need follow-up tweaks.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ───────────────────────────── -->
+<div class="card">
+  <h2>Steps to ship</h2>
+  <p class="sub">Run from the new folder. The <code>node_modules</code> symlink (pointing at the original folder) gets replaced by a real install in step 1.</p>
+
+  <ol class="steps">
+    <li class="step done">
+      <div class="num"><span>1</span></div>
+      <div class="body">
+        <p class="label">Fork sarvam-makemycall &rarr; sarvam-makemycall-tatva</p>
+        <p class="desc">Done. <code>rsync</code> copy excluding <code>node_modules</code>, <code>.expo</code>, native build dirs.</p>
+      </div>
+    </li>
+    <li class="step done">
+      <div class="num"><span>2</span></div>
+      <div class="body">
+        <p class="label">Pull Tatva tokens, build theme module</p>
+        <p class="desc">Done. Tokens read directly from the Storybook iframe via Claude in Chrome.</p>
+      </div>
+    </li>
+    <li class="step done">
+      <div class="num"><span>3</span></div>
+      <div class="body">
+        <p class="label">Redesign three screens + tab bar</p>
+        <p class="desc">Done. <code>tsc --noEmit --skipLibCheck</code> green.</p>
+      </div>
+    </li>
+    <li class="step">
+      <div class="num"><span>4</span></div>
+      <div class="body">
+        <p class="label">Replace the node_modules symlink with a real install</p>
+        <p class="desc">The current <code>node_modules</code> is a symlink to the original folder so the typecheck could run. Resolve dependencies for real before native builds.</p>
+        <pre>cd sarvam-makemycall-tatva
+rm node_modules
+npm install</pre>
+      </div>
+    </li>
+    <li class="step">
+      <div class="num"><span>5</span></div>
+      <div class="body">
+        <p class="label">Clean the Android build cache (do NOT prebuild)</p>
+        <p class="desc">
+          <strong style="color: var(--danger);">Don't run <code>expo prebuild --clean</code> on this project.</strong>
+          The <code>android/</code> folder is intentionally committed with manual Firebase wiring (the <code>google-services</code> Gradle plugin in <code>app/build.gradle</code>, <code>MainActivity.kt</code> imports, etc.). <code>prebuild&nbsp;--clean</code> wipes and regenerates that folder from <code>app.json</code>, which loses the Firebase setup and crashes login with <code>RNFBAppModule not found</code>. Just clear Gradle's cache instead — Expo's autolinking picks up the new <code>react-native-svg</code> native module on the next install.
+        </p>
+        <pre>cd android && ./gradlew clean && cd ..</pre>
+        <p class="desc" style="margin-top: 8px;">
+          If someone has already prebuild-wiped the folder, recover with: <code>git checkout HEAD -- android/</code>, then make sure <code>android/app/google-services.json</code> is present (it's gitignored — pull from <code>_secrets/</code>) before rebuilding.
+        </p>
+      </div>
+    </li>
+    <li class="step">
+      <div class="num"><span>6</span></div>
+      <div class="body">
+        <p class="label">Run on Android device, do visual QA</p>
+        <p class="desc">Compare side-by-side with <code>MOCKUP.html</code>. Walk the auth flow + agent creation + campaigns + settings tabs.</p>
+        <pre>npx expo run:android</pre>
+      </div>
+    </li>
+    <li class="step">
+      <div class="num"><span>7</span></div>
+      <div class="body">
+        <p class="label">Sweep the un-migrated screens</p>
+        <p class="desc">Auth, profile-setup, agents, campaigns wizard, contacts &mdash; all picking up the new palette via the <code>COLORS</code> shim. List anything that looks off; we redesign in a follow-up pass.</p>
+      </div>
+    </li>
+    <li class="step">
+      <div class="num"><span>8</span></div>
+      <div class="body">
+        <p class="label">Delete the ambient .d.ts</p>
+        <p class="desc">Once <code>npm install</code> has succeeded and Phosphor's own types are present, remove the stub:</p>
+        <pre>rm src/types/phosphor-react-native.d.ts</pre>
+      </div>
+    </li>
+    <li class="step">
+      <div class="num"><span>9</span></div>
+      <div class="body">
+        <p class="label">Promote the fork &rarr; main folder</p>
+        <p class="desc">Either swap the folder names (recommended), or cherry-pick the diff into the original <code>sarvam-makemycall</code>.</p>
+        <pre>cd ..
+mv sarvam-makemycall sarvam-makemycall-pre-tatva
+mv sarvam-makemycall-tatva sarvam-makemycall</pre>
+      </div>
+    </li>
+  </ol>
+</div>
+
+<!-- ───────────────────────────── -->
+<div class="card">
+  <h2>Decisions baked in</h2>
+
+  <div class="callout">
+    <div class="ico">!</div>
+    <div class="body">
+      <strong>Brand colour change.</strong> The previous codebase enforced "no indigo / blue / purple anywhere" (cream + ink editorial). Tatva ships <em>monochrome chrome with indigo as the single accent</em>. The fork follows Tatva: indigo on brand mark, wallet pill, active tab. Update <code>CLAUDE.md</code> when promoting the fork so the rule reads "Tatva tokens only" rather than "no indigo".
+    </div>
+  </div>
+
+  <div class="callout" style="background: var(--positive-bg); border-color: var(--positive);">
+    <div class="ico" style="background: var(--positive);">&#10003;</div>
+    <div class="body">
+      <strong>Icon pack: Phosphor v3.</strong> Picked over Lucide / HugeIcons because (1) regular-weight stroke matches Tatva's editorial restraint, (2) the React Native binding is mature, (3) Phosphor's web font is trivial to mirror in the mockup so design and code track each other 1:1. <em>Note:</em> v3 deprecated the un-suffixed names (<code>House</code>, <code>Phone</code>, &hellip;) in favour of <code>HouseIcon</code>, <code>PhoneIcon</code>, &hellip;. The fork uses the suffixed form throughout &mdash; no compiler strikethroughs.
+    </div>
+  </div>
+
+  <div class="callout" style="background: var(--warning-bg); border-color: var(--warning);">
+    <div class="ico" style="background: var(--warning);">&#9888;</div>
+    <div class="body">
+      <strong>Tab icons: constant weight.</strong> Active state communicated by colour alone. We initially toggled <code>regular &harr; fill</code> on focus; the negative-space change made the icon look like it shrank on press. Don't reintroduce.
+    </div>
+  </div>
+</div>
+
+<!-- ───────────────────────────── -->
+<div class="card">
+  <h2>Sweep findings &mdash; un-migrated screens</h2>
+  <p class="sub">14 screens still pull from <code>COLORS</code> via the shim. They render in the new palette automatically, but two specific tokens shifted hue dramatically &mdash; flagged below for visual QA.</p>
+
+  <table class="files">
+    <thead>
+      <tr><th>Token</th><th>Old &rarr; new</th><th>Where it lands</th><th>Read</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="path">COLORS.primaryLight</td>
+        <td class="why"><code>#f0e8d6</code> &rarr; <code>#e8effc</code><br><span style="color: var(--content-tertiary)">warm cream &rarr; light indigo</span></td>
+        <td class="why">14 usages: contact import cards, agent preview tiles, campaign wizard active-preset / contact-picked, OTP focused input, auth landing tiles, agents/new active state.</td>
+        <td class="why">Likely a <strong>happy accident</strong> &mdash; CollectPay uses light indigo for the same "active / selected" states. But review on device because the contrast against white surfaces is higher than against warm cream, so any element using primaryLight will pop more.</td>
+      </tr>
+      <tr>
+        <td class="path">COLORS.background</td>
+        <td class="why"><code>#faf6ed</code> &rarr; <code>#fafafa</code><br><span style="color: var(--content-tertiary)">warm cream &rarr; cool near-white</span></td>
+        <td class="why">21 usages: every container background outside the (tabs)/ folder.</td>
+        <td class="why">The intentional Tatva shift. Whole app moves from beige to white. If testers find it sterile, this is the lever to soften.</td>
+      </tr>
+      <tr>
+        <td class="path">COLORS.cream / paper / borderSoft / textOnInk</td>
+        <td class="why">small-magnitude shifts</td>
+        <td class="why">Scattered &mdash; ~30 usages combined.</td>
+        <td class="why">Unlikely to read as broken on device.</td>
+      </tr>
+      <tr>
+        <td class="path">COLORS.ink / primary / text / success / warning / danger</td>
+        <td class="why">unchanged hex</td>
+        <td class="why">All buttons, body text, status accents.</td>
+        <td class="why">No regression. These keys point to the same values in both palettes.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ───────────────────────────── -->
+<div class="card">
+  <h2>Live checklist</h2>
+  <p class="sub">Tick as you go &mdash; state persists in this view.</p>
+
+  <ul class="checklist" id="checklist">
+    <li><input type="checkbox" id="c1"><label for="c1">Replaced symlink with real <code>npm install</code><span class="small">step 4</span></label></li>
+    <li><input type="checkbox" id="c2"><label for="c2">Ran <code>expo prebuild --clean</code><span class="small">step 5 &mdash; required for react-native-svg native code</span></label></li>
+    <li><input type="checkbox" id="c3"><label for="c3">Built and launched on Android device<span class="small">step 6</span></label></li>
+    <li><input type="checkbox" id="c4"><label for="c4">Home screen visual QA passed<span class="small">brand bar, wallet pill, summary, agent cards, FAB</span></label></li>
+    <li><input type="checkbox" id="c5"><label for="c5">Campaigns screen visual QA passed<span class="small">stat bar, KPI lines, status pills, credits footer</span></label></li>
+    <li><input type="checkbox" id="c6"><label for="c6">Settings screen visual QA passed<span class="small">profile card, label-over-value rows, WhatsApp green icon</span></label></li>
+    <li><input type="checkbox" id="c7"><label for="c7">Tab bar tested &mdash; no shrink on press<span class="small">verify the regular-weight stays constant in both states</span></label></li>
+    <li><input type="checkbox" id="c8"><label for="c8">Walked the un-migrated flows (auth, agents, contacts, wizard)<span class="small">noted anything off-brand for follow-up</span></label></li>
+    <li><input type="checkbox" id="c9"><label for="c9">Deleted <code>src/types/phosphor-react-native.d.ts</code><span class="small">step 8 &mdash; once Phosphor types are real</span></label></li>
+    <li><input type="checkbox" id="c10"><label for="c10">Updated <code>CLAUDE.md</code> palette rule<span class="small">replace "no indigo" with "Tatva tokens only"</span></label></li>
+    <li><input type="checkbox" id="c11"><label for="c11">Promoted fork &rarr; main folder<span class="small">step 9</span></label></li>
+    <li><input type="checkbox" id="c12"><label for="c12">Pushed branch / opened PR for backend devs to review<span class="small">attach screenshots from the device</span></label></li>
+  </ul>
+</div>
+
+<p class="footer-note">Source: <code>sarvam-makemycall-tatva/MIGRATION.html</code> &middot; Visual reference: <code>sarvam-makemycall-tatva/MOCKUP.html</code></p>
+
+</div>
+
+<script>
+  // Persist checklist state across re-opens.
+  const STORAGE = 'mmc-tatva-migration-v1';
+  const checklist = document.getElementById('checklist');
+  const saved = JSON.parse(localStorage.getItem(STORAGE) || '{}');
+  let doneCount = 0;
+  const total = 12;
+
+  checklist.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+    if (saved[cb.id]) {
+      cb.checked = true;
+      cb.closest('li').classList.add('done');
+      doneCount++;
+    }
+    cb.addEventListener('change', () => {
+      cb.closest('li').classList.toggle('done', cb.checked);
+      saved[cb.id] = cb.checked;
+      localStorage.setItem(STORAGE, JSON.stringify(saved));
+      updateProgress();
+    });
+  });
+
+  function updateProgress() {
+    const checked = checklist.querySelectorAll('input[type="checkbox"]:checked').length;
+    document.getElementById('p-left').textContent = String(total - checked);
+    const cell = document.getElementById('p-left').parentElement;
+    cell.classList.remove('pending', 'done');
+    cell.classList.add(checked === total ? 'done' : 'pending');
+  }
+  updateProgress();
+</script>
+
+</body>
+</html>

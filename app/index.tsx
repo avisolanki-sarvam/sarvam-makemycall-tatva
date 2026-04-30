@@ -8,7 +8,7 @@ import { COLORS } from '../src/constants/api';
  *
  * Routing tree:
  *   isHydrating              → loading spinner (reading tokens from secure store)
- *   !isLoggedIn              → /(auth)/login
+ *   !isLoggedIn              → /(auth)        (the marketing landing page)
  *   logged in                → /(tabs)
  *
  * Note (Apr 2026): we used to gate /(tabs) on "user has at least one agent"
@@ -20,6 +20,10 @@ import { COLORS } from '../src/constants/api';
  * handles the empty-state for users without an agent (a focused "create
  * your first assistant" hero that pushes to /profile-setup), and Settings
  * stays reachable via the tab bar from minute one.
+ *
+ * Note (Apr 2026, second pass): unauthenticated users now land on the
+ * /(auth) marketing landing page rather than the bare /(auth)/login form.
+ * Tap-through from landing → /(auth)/login.
  */
 export default function Index() {
   const isHydrating = useAuthStore((s) => s.isHydrating);
@@ -34,7 +38,7 @@ export default function Index() {
   }
 
   if (!isLoggedIn) {
-    return <Redirect href="/(auth)/login" />;
+    return <Redirect href="/(auth)" />;
   }
 
   return <Redirect href="/(tabs)" />;

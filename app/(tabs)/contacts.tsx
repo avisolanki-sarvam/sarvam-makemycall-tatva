@@ -12,10 +12,26 @@ import {
   Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
 import { useContactStore, type Contact } from '../../src/stores/contactStore';
 import { api } from '../../src/services/api';
 import { COLORS } from '../../src/constants/api';
 import { loadDeviceContacts, type DeviceContact } from '../../src/services/contactImport';
+
+// 4 add modes surfaced as prominent buttons at the top of the Contacts
+// tab. Each routes to /contacts/import with the matching mode pre-selected.
+// /contacts/import is now agent-optional — entered from here without an
+// agentId, it runs in save-only mode (no campaign launch).
+const ADD_MODES: Array<{
+  mode: 'paste' | 'photo' | 'voice' | 'contacts';
+  label: string;
+  icon: keyof typeof Feather.glyphMap;
+}> = [
+  { mode: 'paste', label: 'Paste', icon: 'edit-3' },
+  { mode: 'photo', label: 'Photo', icon: 'camera' },
+  { mode: 'voice', label: 'Voice', icon: 'mic' },
+  { mode: 'contacts', label: 'From phone', icon: 'smartphone' },
+];
 
 // Starter-key suggestions. Free-form: tapping a chip just pre-fills the key,
 // the user types whatever value they want. Not industry-detected (yet) — these
@@ -239,7 +255,37 @@ export default function ContactsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Search Bar */}
+      {/* Add-mode header — 4 prominent buttons for the four input modes
+          (Paste / Photo / Voice / From phone). Each deep-links into
+          /contacts/import with the chosen mode pre-selected. /contacts/import
+          runs in save-only mode (no campaign) when entered without
+          agentId. The cryptic icon-buttons that used to sit in the
+          search row are gone — these explicit, labelled tiles are
+          discoverable at a glance. */}
+      <View style={styles.addModeSection}>
+        <Text style={styles.addModeSectionLabel}>Add contacts</Text>
+        <View style={styles.addModeRow}>
+          {ADD_MODES.map((m) => (
+            <TouchableOpacity
+              key={m.mode}
+              style={styles.addModeTile}
+              onPress={() => router.push(`/contacts/import?mode=${m.mode}`)}
+              accessibilityRole="button"
+              accessibilityLabel={`Add contacts via ${m.label}`}
+            >
+              <View style={styles.addModeIcon}>
+                <Feather name={m.icon} size={16} color={COLORS.ink} />
+              </View>
+              <Text style={styles.addModeLabel}>{m.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* Search bar + manual-add quick action. The phone-book and
+          paste-notes shortcuts were promoted into the Add contacts row
+          above — only the manual "+" remains here for users who want to
+          type a single contact in place. */}
       <View style={styles.searchRow}>
         <TextInput
           style={styles.searchInput}
@@ -249,22 +295,9 @@ export default function ContactsScreen() {
           onChangeText={setSearchQuery}
         />
         <TouchableOpacity
-          style={styles.iconBtn}
-          onPress={openImport}
-          accessibilityLabel="Import from phone"
-        >
-          <Text style={styles.iconBtnText}>↓</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.iconBtn}
-          onPress={() => router.push('/contacts/paste-notes')}
-          accessibilityLabel="Paste notes from register"
-        >
-          <Text style={styles.iconBtnText}>≡</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
           style={styles.addBtn}
           onPress={() => (showAddForm ? resetForm() : setShowAddForm(true))}
+          accessibilityLabel={showAddForm ? 'Close manual add' : 'Add a single contact manually'}
         >
           <Text style={styles.addBtnText}>{showAddForm ? '✕' : '+'}</Text>
         </TouchableOpacity>
@@ -491,6 +524,50 @@ export default function ContactsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
+
+  // Add-mode header — 4-tile row at the top of the Contacts tab.
+  addModeSection: {
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 4,
+    gap: 8,
+  },
+  addModeSectionLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  addModeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  addModeTile: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderWidth: 0.5,
+    borderColor: COLORS.borderSoft,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    gap: 6,
+  },
+  addModeIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addModeLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: COLORS.text,
+  },
+
   searchRow: { flexDirection: 'row', padding: 12, gap: 8 },
   searchInput: {
     flex: 1,

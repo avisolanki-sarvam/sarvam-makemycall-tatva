@@ -1,0 +1,108 @@
+{
+  "common": {
+    "back": "Back",
+    "save": "Save",
+    "cancel": "Cancel",
+    "logOut": "Log out",
+    "logOutConfirm": "Are you sure?",
+    "soon": "Soon",
+    "namaste": "Namaste, {{name}}",
+    "namasteFallback": "there",
+    "appName": "MakeMyCall",
+    "version": "v1.0.0"
+  },
+  "tabs": {
+    "home": "Home",
+    "customers": "Customers",
+    "campaigns": "Campaigns",
+    "settings": "Settings"
+  },
+  "home": {
+    "callsToday": "CALLS TODAY",
+    "connected": "CONNECTED",
+    "responded": "RESPONDED",
+    "customer_one": "customer",
+    "customer_other": "customers",
+    "emptyTitle": "Create your first assistant",
+    "emptyBody": "One assistant per use case. Fees, class cancel, new batches.",
+    "emptyCta": "Get started",
+    "testCall": "Test call",
+    "startCampaign": "Start campaign",
+    "createAssistant": "Create assistant",
+    "newAgent": "New assistant",
+    "unnamedAssistant": "Unnamed assistant"
+  },
+  "campaigns": {
+    "title": "Campaigns",
+    "stats": {
+      "total": "TOTAL",
+      "completed": "COMPLETED",
+      "pending": "PENDING",
+      "processing": "PROCESSING"
+    },
+    "kpi": {
+      "targeted": "Targeted",
+      "connected": "Connected",
+      "pending": "Pending"
+    },
+    "creditsUsed": "Credits used:",
+    "emptyTitle": "No campaigns yet",
+    "emptyBody": "Start one from the home screen.",
+    "newCampaign": "New campaign",
+    "status": {
+      "scheduled": "Scheduled",
+      "scheduling": "Scheduling",
+      "calling": "Calling",
+      "done": "Done",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "sections": {
+      "businessDetails": "BUSINESS DETAILS",
+      "agentReminders": "ASSISTANT & REMINDERS",
+      "account": "ACCOUNT"
+    },
+    "rows": {
+      "businessName": "Business name",
+      "businessNamePlaceholder": "Add your business",
+      "manageAgents": "Manage assistants",
+      "manageAgentsValue": "Voice, language, hours",
+      "whatsappTemplate": "WhatsApp template",
+      "whatsappTemplateValue": "Reminder message",
+      "defaultLanguage": "Default language",
+      "creditHistory": "Credit history",
+      "notifications": "Notifications",
+      "helpSupport": "Help & support",
+      "about": "About"
+    }
+  },
+  "agents": {
+    "title": "My assistants",
+    "count_one": "{{count}} assistant",
+    "count_other": "{{count}} assistants",
+    "emptyTitle": "No assistants yet",
+    "emptyBody": "Create one for each calling use case.",
+    "newAgent": "New assistant",
+    "unnamedAgent": "Unnamed assistant",
+    "status": {
+      "settingUp": "Setting up",
+      "failed": "Failed"
+    }
+  },
+  "language": {
+    "title": "Default language",
+    "subtitle": "Used for new assistants and reminders.",
+    "options": {
+      "hi": "Hinglish",
+      "ta": "Tamil",
+      "te": "Telugu",
+      "kn": "Kannada",
+      "mr": "Marathi",
+      "bn": "Bengali",
+      "en": "English"
+    }
+  }
+}

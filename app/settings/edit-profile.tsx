@@ -108,12 +108,16 @@ export default function EditProfileScreen() {
         businessDesc: trimmedDesc || null,
       });
       // Reflect changes in the auth store so the home + settings tabs see
-      // the new values immediately without a re-login. The PUT response
-      // doesn't include businessDesc, so fold the local edit back in.
+      // the new values immediately without a re-login. The backend may
+      // return null for cleared fields; the auth store's User type uses
+      // optional (undefined) instead of nullable, so coerce at the
+      // boundary. We also fold the local description edit back in (the
+      // PUT response doesn't echo businessDesc).
       setUserInStore({
         ...res.user,
-        // Carry the description forward via the local store cache; backend
-        // has the authoritative copy on /user/profile next time.
+        name: res.user.name ?? undefined,
+        businessName: res.user.businessName ?? undefined,
+        businessDesc: trimmedDesc || null,
       });
       Alert.alert('Saved', 'Your business profile has been updated.', [
         { text: 'OK', onPress: () => router.back() },

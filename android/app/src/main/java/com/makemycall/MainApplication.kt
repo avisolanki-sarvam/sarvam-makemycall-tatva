@@ -1,4 +1,4 @@
-package com.anonymous.makemycall
+package com.makemycall
 
 import android.app.Application
 import android.content.res.Configuration

@@ -1,10 +1,25 @@
 /**
- * /contacts/import?agentId=...
+ * /contacts/import?agentId=...&mode=...
  *
- * The "moment-of-truth" contact-import screen for first-time users who just
- * authored an agent and want to call their people. Four input modes — paste,
- * photo, voice, phone contacts — all funnel into a single review step that
- * ends with `POST /agents/:id/launch` against the agent.
+ * Four-mode contact intake screen — paste, photo, voice, phone contacts.
+ * All four funnel into a single review step. Two CTAs from review:
+ *
+ *   - "Save kar lein" (always visible) — POST /contacts/bulk, route to
+ *     /(tabs). The save path is decoupled from agent state.
+ *
+ *   - "Abhi call karein" (only when ?agentId= is provided) — runs
+ *     POST /agents/:id/validate, then POST /agents/:id/launch with the
+ *     parsed contacts. Used when this screen is entered as part of an
+ *     agent's "Create campaign" flow.
+ *
+ * Query params:
+ *   - agentId — optional. With it, the launch CTA appears and the live
+ *     agent-creation banner polls /agents/:id at the top of the screen.
+ *     Without it (e.g. entered from the Contacts tab to add contacts to
+ *     the library), the screen is save-only.
+ *   - mode    — optional initial tab: 'paste' | 'photo' | 'voice' |
+ *     'contacts'. Defaults to 'paste'. Lets per-mode buttons on the
+ *     Contacts tab deep-link straight to a chosen input.
  *
  * Why one screen / four tabs (vs. four routes): the user doesn't yet know
  * which mode is best for them. Showing all four side-by-side as tabs is a
@@ -408,11 +423,30 @@ const bannerStyles = StyleSheet.create({
 
 export default function ContactImportScreen() {
   const router = useRouter();
-  const { agentId } = useLocalSearchParams<{ agentId: string }>();
+  // Both query params are optional now:
+  //
+  //   - agentId — when present, the screen offers BOTH "Save contacts" and
+  //     "Call them now" CTAs (the latter launches a campaign for that
+  //     agent). When absent, only the Save flow runs (the user is just
+  //     adding contacts to their library, no campaign), matching the
+  //     /(tabs)/contacts entry where there's no agent in scope yet.
+  //
+  //   - mode — picks which of the 4 input tabs is active on first paint.
+  //     Lets the Contacts tab's per-mode buttons deep-link straight into
+  //     "voice" or "photo" without an extra tap. Defaults to 'paste'.
+  const { agentId, mode: requestedMode } = useLocalSearchParams<{
+    agentId?: string;
+    mode?: string;
+  }>();
 
   // Phase: 'input' is the 4-mode picker, 'review' is the parsed-list editor.
   const [phase, setPhase] = useState<'input' | 'review'>('input');
-  const [mode, setMode] = useState<Mode>('paste');
+  const [mode, setMode] = useState<Mode>(() => {
+    const valid: Mode[] = ['paste', 'photo', 'voice', 'contacts'];
+    return (valid as readonly string[]).includes(requestedMode || '')
+      ? (requestedMode as Mode)
+      : 'paste';
+  });
 
   // ── Paste state ──────────────────────────────────────────────────────────
   const [pasteText, setPasteText] = useState('');
@@ -1585,38 +1619,42 @@ function ReviewView(props: {
               </View>
             ) : null}
 
-            {/* SECONDARY: Abhi call karein / Call them now. Gated on
-                valid === true. While validating, show a subtle "Checking…"
-                state. If validate failed, button stays disabled (banner above
-                explains why). */}
-            <TouchableOpacity
-              style={[
-                styles.secondaryCta,
-                (validating || submitting || saving || valid !== true || validCount === 0) &&
-                  styles.secondaryCtaDisabled,
-              ]}
-              onPress={onLaunch}
-              disabled={
-                validating || submitting || saving || valid !== true || validCount === 0
-              }
-              activeOpacity={0.85}
-            >
-              {submitting ? (
-                <ActivityIndicator color={COLORS.ink} />
-              ) : validating ? (
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={styles.secondaryCtaTextHi}>Checking…</Text>
-                  <Text style={styles.secondaryCtaTextEn}>Verifying agent</Text>
-                </View>
-              ) : (
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={styles.secondaryCtaTextHi}>Abhi call karein</Text>
-                  <Text style={styles.secondaryCtaTextEn}>
-                    Call {validCount} now
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            {/* SECONDARY: Abhi call karein / Call them now. Only shown
+                when an agentId was provided (campaign-launch context). In
+                the standalone add-contacts entry from the Contacts tab,
+                no agent is in scope and "Save kar lein" above is the only
+                action — campaigns get launched later from per-agent cards
+                on the home screen. */}
+            {agentId ? (
+              <TouchableOpacity
+                style={[
+                  styles.secondaryCta,
+                  (validating || submitting || saving || valid !== true || validCount === 0) &&
+                    styles.secondaryCtaDisabled,
+                ]}
+                onPress={onLaunch}
+                disabled={
+                  validating || submitting || saving || valid !== true || validCount === 0
+                }
+                activeOpacity={0.85}
+              >
+                {submitting ? (
+                  <ActivityIndicator color={COLORS.ink} />
+                ) : validating ? (
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={styles.secondaryCtaTextHi}>Checking…</Text>
+                    <Text style={styles.secondaryCtaTextEn}>Verifying agent</Text>
+                  </View>
+                ) : (
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={styles.secondaryCtaTextHi}>Abhi call karein</Text>
+                    <Text style={styles.secondaryCtaTextEn}>
+                      Call {validCount} now
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ) : null}
           </>
         )}
       </ScrollView>

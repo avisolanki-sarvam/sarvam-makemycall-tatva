@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MakeMyCall · Tatva mockup (restrained)</title>
+<!--
+  Phosphor icons via web font (Phosphor's own CDN). Icon names below
+  match what the React Native app uses 1:1 — same library, same glyphs.
+-->
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<style>
+  :root {
+    --surface-primary: #fafafa;
+    --surface-secondary: #ffffff;
+    --background-secondary: #f5f5f5;
+    --background-tertiary: #f0f0f0;
+    --content-primary: #141414;
+    --content-secondary: #666666;
+    --content-tertiary: #999999;
+    --content-quaternary: #b3b3b3;
+    --content-inverse: #ffffff;
+    --border-primary: #f0f0f0;
+    --border-secondary: #e6e6e6;
+    --brand-primary: #1a1a1a;
+    --indigo-bg: #e8effc;
+    --indigo: #3333cc;
+    --positive-bg: #f2f8eb;
+    --positive: #385418;
+    --warning-bg: #fff8e6;
+    --warning: #a27224;
+    --danger-bg: #fde7e2;
+    --danger: #b81514;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: #ece8df;
+    color: var(--content-primary);
+    padding: 32px 24px 64px;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .header h1 { margin: 0 0 6px; font-size: 22px; font-weight: 700; }
+  .header p { margin: 0; color: #555; font-size: 13px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, max-content);
+    gap: 32px;
+    justify-content: center;
+  }
+
+  .device {
+    width: 360px;
+    height: 720px;
+    background: var(--surface-primary);
+    border-radius: 36px;
+    border: 8px solid #1a1a1a;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.18);
+    display: flex;
+    flex-direction: column;
+  }
+  .device .label {
+    position: absolute;
+    top: -34px; left: 0; right: 0;
+    text-align: center;
+    font-size: 12px; font-weight: 600;
+    color: #1a1a1a; letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  /* Top bar */
+  .topbar {
+    background: var(--surface-secondary);
+    border-bottom: 1px solid var(--border-secondary);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .brand-row { display:flex; align-items:center; gap:8px; }
+  .brand-tile {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    background: var(--indigo);
+    color: var(--content-inverse);
+    font-weight: 700; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .brand-name { font-size: 17px; font-weight: 700; color: var(--content-primary); }
+  .wallet-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    background: var(--indigo-bg);
+    color: var(--indigo);
+    border-radius: 9999px;
+    font-size: 13px; font-weight: 600;
+  }
+  .icon-btn {
+    width: 36px; height: 36px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--content-secondary);
+  }
+
+  .body { flex: 1; overflow-y: auto; padding: 16px; }
+  .greeting { font-size: 18px; font-weight: 600; color: var(--content-primary); margin: 0 0 14px; }
+
+  .card {
+    background: var(--surface-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 20px;
+    margin-bottom: 10px;
+  }
+
+  /* Summary card */
+  .summary { display: flex; padding: 18px 0; margin-bottom: 16px; }
+  .summary .half { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .summary .label { font-size: 11px; color: var(--content-tertiary); letter-spacing: 0.5px; font-weight: 600; }
+  .summary .value { font-size: 28px; font-weight: 700; line-height: 1; }
+  .summary .divider { width: 1px; background: var(--border-primary); margin: 4px 0; }
+  .text-positive { color: var(--positive); }
+  .text-danger { color: var(--danger); }
+  .text-warning { color: var(--warning); }
+  .text-indigo { color: var(--indigo); }
+
+  /* Agent card */
+  .agent { padding: 14px; }
+  .agent-row { display:flex; align-items:center; gap:12px; }
+  .medallion {
+    width:40px; height:40px;
+    border-radius:9999px;
+    background: var(--background-secondary);
+    border: 1px solid var(--border-secondary);
+    display:flex; align-items:center; justify-content:center;
+    color: var(--content-primary);
+    font-weight:700; font-size: 13px;
+  }
+  .agent-meta { flex:1; min-width:0; }
+  .agent-name { font-size: 15px; font-weight: 600; color: var(--content-primary); margin: 0; }
+  .agent-phone { font-size: 13px; color: var(--content-tertiary); margin: 2px 0 0; }
+  .chev { color: var(--content-tertiary); }
+  .agent-cta {
+    margin-top: 12px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--background-secondary);
+    border: 1px solid var(--border-secondary);
+    color: var(--content-primary);
+    padding: 9px 12px;
+    border-radius: 12px;
+    font-size: 13px; font-weight: 600;
+  }
+  .add-agent {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    border: 1px dashed var(--border-secondary);
+    border-radius: 20px;
+    padding: 14px;
+    color: var(--content-secondary);
+    font-size: 13px; font-weight: 500;
+    margin-top: 4px;
+  }
+
+  /* FAB */
+  .fab {
+    position: absolute;
+    right: 16px; bottom: 78px;
+    background: var(--positive);
+    color: var(--content-inverse);
+    padding: 13px 18px;
+    border-radius: 9999px;
+    font-size: 14px; font-weight: 600;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+
+  /* Tab bar */
+  .tabbar {
+    background: var(--surface-secondary);
+    border-top: 1px solid var(--border-secondary);
+    padding: 8px 0 12px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    text-align: center;
+  }
+  .tabbar .item {
+    display: flex; flex-direction: column; gap: 2px;
+    align-items: center;
+    color: var(--content-tertiary);
+    font-size: 11px; font-weight: 500;
+  }
+  .tabbar .item .ph { font-size: 22px; }
+  .tabbar .item.active { color: var(--indigo); }
+
+  /* Stat bar */
+  .statbar { display: flex; padding: 16px 0; margin-bottom: 14px; }
+  .statbar .cell { flex: 1; text-align: center; }
+  .statbar .v { font-size: 22px; font-weight: 700; line-height: 1; }
+  .statbar .l { font-size: 10px; color: var(--content-tertiary); margin-top: 4px; letter-spacing: 0.6px; font-weight: 600; }
+  .statbar .divider { width:1px; background: var(--border-primary); margin: 4px 0; }
+
+  /* Campaign card */
+  .camp { padding: 14px; }
+  .camp-top { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 10px; }
+  .camp-title-row { display:flex; align-items:center; gap:10px; flex:1; min-width:0; }
+  .icon-tile-sm {
+    width: 32px; height: 32px;
+    border-radius: 12px;
+    background: var(--background-secondary);
+    border: 1px solid var(--border-secondary);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--content-primary);
+    font-size: 16px;
+  }
+  .camp-title { font-size: 15px; font-weight: 600; color: var(--content-primary); margin: 0; }
+  .camp-date { font-size: 11px; color: var(--content-tertiary); margin: 1px 0 0; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 9px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .chip.completed { background: var(--positive-bg); color: var(--positive); }
+  .chip.calling   { background: var(--indigo-bg);   color: var(--indigo); }
+  .chip.failed    { background: var(--danger-bg);   color: var(--danger); }
+
+  .kpi-row { display:flex; align-items:center; justify-content:space-between; padding: 2px 0; }
+  .kpi { display:flex; gap: 4px; align-items:center; font-size: 12px; color: var(--content-secondary); }
+  .kpi .v { font-weight: 700; font-size: 13px; margin-left: 2px; }
+  .kpi .ph { font-size: 12px; }
+
+  .credits-row {
+    display: flex; align-items: center; gap: 6px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-primary);
+    font-size: 12px; color: var(--content-secondary);
+  }
+  .credits-row .v { color: var(--content-primary); font-weight: 600; }
+
+  /* Settings */
+  .profile-card {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px;
+    margin-bottom: 18px;
+  }
+  .avatar-lg {
+    width: 48px; height: 48px;
+    border-radius: 9999px;
+    background: var(--indigo);
+    color: var(--content-inverse);
+    display:flex; align-items:center; justify-content:center;
+    font-weight: 700; font-size: 16px;
+  }
+  .profile-name { font-size: 17px; font-weight: 700; color: var(--content-primary); margin: 0; }
+  .profile-phone { font-size: 13px; color: var(--content-secondary); margin: 2px 0 0; }
+
+  .group {
+    background: var(--surface-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 20px;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-primary);
+  }
+  .row:last-child { border-bottom: none; }
+  .row .icon-bubble {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: var(--background-secondary);
+    border: 1px solid var(--border-secondary);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--content-secondary);
+    font-size: 16px;
+  }
+  .row .icon-bubble.green {
+    background: var(--positive-bg);
+    border-color: transparent;
+    color: var(--positive);
+  }
+  .row .label-block { flex: 1; min-width: 0; }
+  .row .label { font-size: 14px; font-weight: 500; color: var(--content-primary); margin: 0; }
+  .row .sub { font-size: 12px; color: var(--content-tertiary); margin-top: 2px; }
+
+  .section-label {
+    font-size: 11px; color: var(--content-tertiary);
+    padding: 0 4px; margin: 8px 0;
+    letter-spacing: 0.6px; font-weight: 600;
+  }
+
+  .logout {
+    margin-top: 24px;
+    padding: 13px 0;
+    border-radius: 12px;
+    border: 1px solid var(--border-secondary);
+    background: var(--surface-secondary);
+    color: var(--danger);
+    text-align: center;
+    font-weight: 600;
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .version { text-align: center; color: var(--content-quaternary); font-size: 11px; margin-top: 14px; }
+
+  .ph { display: inline-block; line-height: 1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>MakeMyCall — Tatva fork (restrained)</h1>
+  <p>Phosphor icons (regular weight). Indigo only on brand mark, wallet pill, active tab. Green only on the FAB and "completed" status. Otherwise monochrome.</p>
+</div>
+
+<div class="grid">
+
+  <!-- ───────────────────────── HOME ───────────────────────── -->
+  <div class="device">
+    <div class="label">Home</div>
+    <div class="topbar">
+      <div class="brand-row">
+        <div class="brand-tile">M</div>
+        <div class="brand-name">MakeMyCall</div>
+      </div>
+      <div class="wallet-pill"><i class="ph ph-wallet"></i> 98</div>
+    </div>
+    <div class="body">
+      <h2 class="greeting">Namaste, Avi</h2>
+
+      <div class="card summary">
+        <div class="half">
+          <div class="label">CALLS TODAY</div>
+          <div class="value text-positive">12</div>
+        </div>
+        <div class="divider"></div>
+        <div class="half">
+          <div class="label">PENDING</div>
+          <div class="value text-danger">3</div>
+        </div>
+      </div>
+
+      <div class="card agent">
+        <div class="agent-row">
+          <div class="medallion">FR</div>
+          <div class="agent-meta">
+            <h3 class="agent-name">Fees Reminder</h3>
+            <p class="agent-phone">+91 80123 45678</p>
+          </div>
+          <i class="ph ph-caret-right chev"></i>
+        </div>
+        <div class="agent-cta">Start campaign</div>
+      </div>
+
+      <div class="card agent">
+        <div class="agent-row">
+          <div class="medallion">CC</div>
+          <div class="agent-meta">
+            <h3 class="agent-name">Class Cancel</h3>
+            <p class="agent-phone">+91 80987 65432</p>
+          </div>
+          <i class="ph ph-caret-right chev"></i>
+        </div>
+        <div class="agent-cta">Start campaign</div>
+      </div>
+
+      <div class="add-agent"><i class="ph ph-plus"></i> New agent</div>
+    </div>
+
+    <div class="fab"><i class="ph ph-phone-outgoing"></i> Start campaign</div>
+
+    <div class="tabbar">
+      <div class="item active"><i class="ph-fill ph-house"></i><span>Home</span></div>
+      <div class="item"><i class="ph ph-users"></i><span>Customers</span></div>
+      <div class="item"><i class="ph ph-megaphone"></i><span>Campaigns</span></div>
+      <div class="item"><i class="ph ph-gear"></i><span>Settings</span></div>
+    </div>
+  </div>
+
+  <!-- ─────────────────── CAMPAIGNS ─────────────────── -->
+  <div class="device">
+    <div class="label">Campaigns</div>
+    <div class="topbar">
+      <div class="brand-row">
+        <div class="brand-tile">M</div>
+        <div class="brand-name">Campaigns</div>
+      </div>
+      <div class="icon-btn"><i class="ph ph-arrows-clockwise" style="font-size:20px;"></i></div>
+    </div>
+    <div class="body">
+
+      <div class="card statbar">
+        <div class="cell"><div class="v">8</div><div class="l">TOTAL</div></div>
+        <div class="divider"></div>
+        <div class="cell"><div class="v text-positive">5</div><div class="l">COMPLETED</div></div>
+        <div class="divider"></div>
+        <div class="cell"><div class="v text-warning">2</div><div class="l">PENDING</div></div>
+        <div class="divider"></div>
+        <div class="cell"><div class="v text-indigo">1</div><div class="l">PROCESSING</div></div>
+      </div>
+
+      <div class="card camp">
+        <div class="camp-top">
+          <div class="camp-title-row">
+            <div class="icon-tile-sm"><i class="ph ph-megaphone"></i></div>
+            <div>
+              <h3 class="camp-title">March Fees Reminder</h3>
+              <p class="camp-date">7 Mar 2026, 12:57 pm</p>
+            </div>
+          </div>
+          <div class="chip completed"><i class="ph ph-check-circle"></i> Done</div>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi"><i class="ph ph-paper-plane-tilt"></i> Sent: <span class="v">28</span></div>
+          <div class="kpi"><i class="ph ph-check-circle" style="color:var(--positive)"></i> Connected: <span class="v text-positive">24</span></div>
+          <div class="kpi"><i class="ph ph-clock" style="color:var(--danger)"></i> Pending: <span class="v text-danger">4</span></div>
+        </div>
+        <div class="credits-row">
+          <i class="ph ph-wallet"></i>
+          <span>Credits used: <span class="v">28</span></span>
+        </div>
+      </div>
+
+      <div class="card camp">
+        <div class="camp-top">
+          <div class="camp-title-row">
+            <div class="icon-tile-sm"><i class="ph ph-megaphone"></i></div>
+            <div>
+              <h3 class="camp-title">February Fees Reminder</h3>
+              <p class="camp-date">18 Feb 2026, 2:47 am</p>
+            </div>
+          </div>
+          <div class="chip completed"><i class="ph ph-check-circle"></i> Done</div>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi"><i class="ph ph-paper-plane-tilt"></i> Sent: <span class="v">22</span></div>
+          <div class="kpi"><i class="ph ph-check-circle" style="color:var(--positive)"></i> Connected: <span class="v text-positive">19</span></div>
+          <div class="kpi"><i class="ph ph-clock" style="color:var(--danger)"></i> Pending: <span class="v text-danger">3</span></div>
+        </div>
+        <div class="credits-row">
+          <i class="ph ph-wallet"></i>
+          <span>Credits used: <span class="v">22</span></span>
+        </div>
+      </div>
+
+      <div class="card camp">
+        <div class="camp-top">
+          <div class="camp-title-row">
+            <div class="icon-tile-sm"><i class="ph ph-megaphone"></i></div>
+            <div>
+              <h3 class="camp-title">Class cancel — Wednesday</h3>
+              <p class="camp-date">29 Apr 2026, 9:30 am</p>
+            </div>
+          </div>
+          <div class="chip calling"><i class="ph ph-phone-call"></i> Calling</div>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi"><i class="ph ph-paper-plane-tilt"></i> Sent: <span class="v">14</span></div>
+          <div class="kpi"><i class="ph ph-check-circle" style="color:var(--positive)"></i> Connected: <span class="v text-positive">8</span></div>
+          <div class="kpi"><i class="ph ph-clock" style="color:var(--danger)"></i> Pending: <span class="v text-danger">6</span></div>
+        </div>
+        <div class="credits-row">
+          <i class="ph ph-wallet"></i>
+          <span>Credits used: <span class="v">14</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabbar">
+      <div class="item"><i class="ph ph-house"></i><span>Home</span></div>
+      <div class="item"><i class="ph ph-users"></i><span>Customers</span></div>
+      <div class="item active"><i class="ph-fill ph-megaphone"></i><span>Campaigns</span></div>
+      <div class="item"><i class="ph ph-gear"></i><span>Settings</span></div>
+    </div>
+  </div>
+
+  <!-- ─────────────────── SETTINGS ─────────────────── -->
+  <div class="device">
+    <div class="label">Settings</div>
+    <div class="topbar">
+      <div class="brand-row">
+        <div class="brand-tile">M</div>
+        <div class="brand-name">Settings</div>
+      </div>
+    </div>
+    <div class="body">
+
+      <div class="card profile-card">
+        <div class="avatar-lg">AS</div>
+        <div>
+          <h3 class="profile-name">Avi Solanki</h3>
+          <div class="profile-phone">+91 99878 07148</div>
+        </div>
+      </div>
+
+      <div class="section-label">BUSINESS DETAILS</div>
+      <div class="group">
+        <div class="row">
+          <div class="icon-bubble"><i class="ph ph-storefront"></i></div>
+          <div class="label-block">
+            <p class="label">Business name</p>
+            <p class="sub">Prince Hostel</p>
+          </div>
+          <i class="ph ph-caret-right chev"></i>
+        </div>
+      </div>
+
+      <div class="section-label">AGENT &amp; REMINDERS</div>
+      <div class="group">
+        <div class="row">
+          <div class="icon-bubble"><i class="ph ph-users"></i></div>
+          <div class="label-block">
+            <p class="label">Manage agents</p>
+            <p class="sub">Voice, language, hours</p>
+          </div>
+          <i class="ph ph-caret-right chev"></i>
+        </div>
+        <div class="row">
+          <div class="icon-bubble green"><i class="ph ph-whatsapp-logo"></i></div>
+          <div class="label-block">
+            <p class="label">WhatsApp template</p>
+            <p class="sub">Reminder message</p>
+          </div>
+          <i class="ph ph-caret-right chev"></i>
+        </div>
+        <div class="row">
+          <div class="icon-bubble"><i class="ph ph-translate"></i></div>
+          <div class="label-block">
+            <p class="label">Default language</p>
+            <p class="sub">Hinglish</p>
+          </div>
+          <i class="ph ph-caret-right chev"></i>
+        </div>
+      </div>
+
+      <div class="section-label">ACCOUNT</div>
+      <div class="group">
+        <div class="row">
+          <div class="icon-bubble"><i class="ph ph-wallet"></i></div>
+          <div class="label-block">
+            <p class="label">Credit history</p>
+          </div>
+          <i class="ph ph-caret-right chev"></i>
+        </div>
+        <div class="row">
+          <div class="icon-bubble"><i class="ph ph-bell"></i></div>
+          <div class="label-block">
+            <p class="label">Notifications</p>
+          </div>
+          <i class="ph ph-caret-right chev"></i>
+        </div>
+        <div class="row">
+          <div class="icon-bubble"><i class="ph ph-question"></i></div>
+          <div class="label-block">
+            <p class="label">Help &amp; support</p>
+          </div>
+          <i class="ph ph-caret-right chev"></i>
+        </div>
+        <div class="row">
+          <div class="icon-bubble"><i class="ph ph-info"></i></div>
+          <div class="label-block">
+            <p class="label">About</p>
+          </div>
+          <i class="ph ph-caret-right chev"></i>
+        </div>
+      </div>
+
+      <div class="logout"><i class="ph ph-sign-out"></i> Log out</div>
+      <div class="version">v1.0.0</div>
+    </div>
+
+    <div class="tabbar">
+      <div class="item"><i class="ph ph-house"></i><span>Home</span></div>
+      <div class="item"><i class="ph ph-users"></i><span>Customers</span></div>
+      <div class="item"><i class="ph ph-megaphone"></i><span>Campaigns</span></div>
+      <div class="item active"><i class="ph-fill ph-gear"></i><span>Settings</span></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

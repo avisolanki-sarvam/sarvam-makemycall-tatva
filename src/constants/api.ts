@@ -16,52 +16,16 @@ const RAILWAY_URL = 'https://sarvam-makemycall-service-production-3699.up.railwa
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || RAILWAY_URL;
 
-/**
- * Editorial cream + ink black palette (April 2026 mockups).
- * No indigo / blue / purple. Status accents use sage / tan / rust / mute.
- *
- * Property names are kept for backwards compatibility with existing screens
- * (`primary`, `primaryLight`, `success`, `warning`, `danger`). Use the
- * semantic aliases (`ink`, `cream`, `paper`, etc.) for new code.
- */
-export const COLORS = {
-  // Surfaces
-  background: '#faf6ed',   // warm cream — page background
-  surface: '#fffdf6',      // paper — cards
-  cream: '#faf6ed',
-  paper: '#fffdf6',
-
-  // Ink / primary action
-  ink: '#1a1a1a',
-  inkSoft: '#2a2a2a',
-  primary: '#1a1a1a',           // alias — was indigo
-  primaryDark: '#000000',
-  primaryLight: '#f0e8d6',      // soft cream tint, used as active/hover bg
-  secondary: '#1a1a1a',         // we don't use a second brand colour anymore
-
-  // Text
-  text: '#1a1a1a',
-  textSecondary: '#6b6155',    // warm gray
-  textMuted: '#8b8170',        // warmer gray
-  textOnInk: '#faf6ed',        // text colour on dark buttons
-
-  // Borders
-  border: '#e8e0d0',           // warm border
-  borderSoft: '#f0e8d6',
-
-  // Status — bg + text pairs are exposed as separate keys
-  // Old aliases (success/warning/danger) point to text colours so existing
-  // screens keep working; status chips should use the explicit pairs.
-  success: '#3d4a2c',          // sage — committed
-  warning: '#7c5a2a',           // tan — extension
-  danger:  '#8b3e1d',           // rust — declined
-
-  statusCommittedBg:  '#dde6cd',
-  statusCommittedFg:  '#3d4a2c',
-  statusExtensionBg:  '#f0e2c7',
-  statusExtensionFg:  '#7c5a2a',
-  statusDeclinedBg:   '#f3dccd',
-  statusDeclinedFg:   '#8b3e1d',
-  statusMuteBg:       '#ece5d4',
-  statusMuteFg:       '#6b6155',
-};
+// ─── Colour palette ─────────────────────────────────────────────────────────
+//
+// We migrated from the editorial cream + ink palette to the Tatva token set
+// (April 2026 → Tatva fork). To keep this an additive change for the rest
+// of the codebase, re-export `COLORS` from `theme.ts` — the named keys are
+// preserved (`primary`, `surface`, `ink`, etc.) but they now resolve to
+// Tatva-mapped values (white surfaces, near-black brand, indigo accent,
+// semantic-state colours).
+//
+// New screens should import from `./theme` directly so they get the full
+// Tatva surface — `TatvaColors`, `Spacing`, `Radius`, `Type`, `Shadow`,
+// `StatusToTatva`. Use `COLORS` only as a transitional alias.
+export { COLORS } from './theme';

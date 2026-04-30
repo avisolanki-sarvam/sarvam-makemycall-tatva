@@ -10,8 +10,10 @@ import {
   Alert,
   FlatList,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { CheckIcon } from 'phosphor-react-native';
 import { COLORS } from '../../src/constants/api';
+import { TatvaColors } from '../../src/constants/theme';
 import { api, readEnvelope } from '../../src/services/api';
 import { useContactStore, type Contact } from '../../src/stores/contactStore';
 import {
@@ -99,6 +101,11 @@ const SCHEDULE_PRESETS = [
 
 export default function NewCampaignScreen() {
   const router = useRouter();
+  // Optional ?agentId= picks WHICH agent this campaign belongs to. Used by
+  // the home screen's per-agent "Create campaign" buttons in the multi-
+  // agent UX. When absent (legacy entry from a tab/+ button), the bootstrap
+  // falls back to the first ready agent — same behaviour as before.
+  const { agentId: requestedAgentId } = useLocalSearchParams<{ agentId?: string }>();
   const draft = useCampaignDraftStore();
   const { contacts, getFilteredContacts, setContacts, setSearchQuery, searchQuery } =
     useContactStore();
@@ -150,7 +157,13 @@ export default function NewCampaignScreen() {
       ]);
       setContacts(contactsRes?.contacts || []);
       setCreditBalance(dashboardRes?.creditBalance ?? 0);
-      const a = agentsRes?.agents?.[0];
+      // Prefer the explicitly-requested agent when caller passed ?agentId=
+      // (multi-agent UX). Fall back to the first ready agent so legacy
+      // entry points (no param) keep working.
+      const allAgents = agentsRes?.agents ?? [];
+      const a =
+        (requestedAgentId && allAgents.find((x) => x.id === requestedAgentId)) ||
+        allAgents[0];
       if (a) {
         setAgentId(a.id);
         setAgentName(a.name);
@@ -196,13 +209,13 @@ export default function NewCampaignScreen() {
           setValid(true);
         } else {
           setValid(false);
-          setValidateError(env.hint || raw?.errors?.[0]?.hint || 'Agent is not ready.');
+          setValidateError(env.hint || raw?.errors?.[0]?.hint || 'Assistant is not ready.');
           setValidateErrorCode(raw?.errors?.[0]?.code || null);
         }
       } catch (err: any) {
         if (cancelled) return;
         setValid(false);
-        setValidateError(err?.message || 'Could not check agent status.');
+        setValidateError(err?.message || 'Could not check assistant status.');
       } finally {
         if (!cancelled) setValidating(false);
       }
@@ -294,12 +307,38 @@ export default function NewCampaignScreen() {
       <TouchableOpacity onPress={goPrev} hitSlop={12} style={styles.backBtn}>
         <Text style={styles.backTxt}>← Back</Text>
       </TouchableOpacity>
-      <Text style={styles.stepIndicator}>
-        Step {stepIndex + 1} of {STEP_ORDER.length}
-      </Text>
+      <StepProgress current={stepIndex} total={STEP_ORDER.length} />
       <Text style={styles.title}>{title}</Text>
     </View>
   );
+
+  // 4-segment tick progress bar. Completed segments fill solid + show a small
+  // check at the right edge; the current segment shows the indigo accent;
+  // future segments stay neutral. Replaces the prior "Step 1 of 4" text.
+  function StepProgress({ current, total }: { current: number; total: number }) {
+    return (
+      <View style={styles.progressRow}>
+        {Array.from({ length: total }).map((_, i) => {
+          const isDone = i < current;
+          const isCurrent = i === current;
+          return (
+            <View
+              key={i}
+              style={[
+                styles.progressSeg,
+                isDone && styles.progressSegDone,
+                isCurrent && styles.progressSegCurrent,
+              ]}
+            >
+              {isDone ? (
+                <CheckIcon size={10} color={TatvaColors.contentInverse} weight="bold" />
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+    );
+  }
 
   // ------------------------------------------------------------------ Contacts step
 
@@ -671,7 +710,7 @@ export default function NewCampaignScreen() {
           ) : validating ? (
             <View style={{ alignItems: 'center' }}>
               <Text style={styles.ctaTextHi}>Checking…</Text>
-              <Text style={styles.ctaTextEn}>Verifying agent</Text>
+              <Text style={styles.ctaTextEn}>Verifying assistant</Text>
             </View>
           ) : (
             <View style={{ alignItems: 'center' }}>
@@ -786,6 +825,29 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: 6,
+  },
+  // ─── Step progress (4-segment tick bar, replaces "Step 1 of 4") ───
+  progressRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  progressSeg: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: TatvaColors.borderPrimary,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  progressSegDone: {
+    backgroundColor: TatvaColors.brandPrimary,
+    paddingRight: 3,
+  },
+  progressSegCurrent: {
+    backgroundColor: TatvaColors.indigoContent,
   },
   title: { fontSize: 22, fontWeight: '500', color: COLORS.text, marginTop: 4 },
   hint: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 14, lineHeight: 18 },

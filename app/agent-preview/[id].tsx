@@ -1,29 +1,35 @@
 /**
  * /agent-preview/[id]
  *
- * Post-onboarding "moment of wow" screen. The user just submitted their
- * business description; the backend returned 202 with a stub Agent row
- * (status:'creating') and queued the heavy LLM + Samvaad work to a BullMQ
- * worker. This screen polls GET /agents/:id every 2s and progressively
- * swaps its skeleton for the real summaryNL when status flips to 'ready'.
+ * Single-screen stage checklist that polls GET /agents/:id every 2s and
+ * surfaces progress as the BullMQ worker advances. Replaces the previous
+ * multi-stage UX (each backend stage swapped the whole screen for a
+ * different staged-loading layout: name reveal, language chips,
+ * deploying medallion). One screen, one checklist — easier to grok and
+ * matches the post-Apr-2026 mockups.
  *
- * Three render states:
- *   - 'creating' → staged loading copy ("Aapka assistant taiyaar kar raha hoon…")
- *   - 'ready'    → full summary + bilingual "Call your people" CTA
- *   - 'failed'   → error card + "Try again" CTA back to profile-setup
+ * Three entry modes via the optional `next` query param:
  *
- * Polling caps at 60s (30 polls × 2s). On timeout we surface a "still
- * working — we'll have it ready in a moment" CTA into /(tabs); the agent
- * will eventually flip on the backend and the dashboard will pick it up
- * on the next open (dashboard.js filters status:'ready').
+ *   - `?next=home`     — entered from /agents/new (multi-agent flow).
+ *     On ready, brief pause then router.replace('/(tabs)') so the new
+ *     agent appears in the home agents list. The DEFAULT for newly-
+ *     created agents in the multi-agent UX.
  *
- * onboardingDone is set HERE (not in profile-setup) the first time we
- * observe status === 'ready'. Rationale: a user who kills the app while
- * status is still 'creating' should re-open to onboarding, not to /(tabs)
- * with a half-built agent.
+ *   - `?next=campaign` — legacy entry from the home screen "Create
+ *     campaign" tile (single-agent flow). On ready, route into
+ *     /campaigns/new. Kept for backwards compatibility with any code
+ *     paths that still pass this param.
+ *
+ *   - no param         — entered by tapping an existing agent card. On
+ *     ready, show the full agent summary and a CTA stack so the user
+ *     can review, test-call, or jump into the campaign wizard.
+ *
+ * onboardingDone is set HERE as a defensive backstop. It's primarily set
+ * in profile-setup now (decoupled from agent creation), but flipping it
+ * here too protects against old auth-store blobs from prior installs.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -58,16 +64,7 @@ interface Agent {
   callTypes: string[];
   summaryNL: SummaryNL;
   createdAt: string;
-  // Async-creation lifecycle. While 'creating', the LLM/Samvaad work is still
-  // running on the backend and the rest of the fields (name, summaryNL, etc.)
-  // may be empty/placeholder. Preview screen polls GET /agents/:id until this
-  // flips to 'ready' (or 'failed', in which case `error` holds the reason).
   status?: 'creating' | 'ready' | 'failed';
-  // Fine-grained progress within the 'creating' lifecycle. Backend writes this
-  // as the BullMQ worker advances stages so the preview screen can show the
-  // user what's happening instead of a blank skeleton. Null/undefined → treat
-  // as 'parsing' (the earliest stage). 'ready' may briefly appear alongside
-  // status flipping to 'ready'.
   creationStage?: 'parsing' | 'designing' | 'translating' | 'deploying' | 'ready' | null;
   error?: string | null;
 }
@@ -75,36 +72,94 @@ interface Agent {
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLLS = 30; // 60s total
 
-/** Three pulsing dots — primary at full / 50% / 22% opacity, 8px round, 6px gap. */
-function StageDots() {
-  return (
-    <View style={styles.dotsRow}>
-      <View style={[styles.dot, { opacity: 1 }]} />
-      <View style={[styles.dot, { opacity: 0.5 }]} />
-      <View style={[styles.dot, { opacity: 0.22 }]} />
-    </View>
-  );
-}
+// Brief pause on the success state before auto-routing to /campaigns/new.
+// Long enough for the user to register "ready", short enough to feel snappy.
+const READY_HOLD_MS = 1500;
 
-/** Phone icon for the deploying-stage medallion. Uses Feather (already in
- *  @expo/vector-icons, no new dependency) so it renders crisp on every
- *  device — the unicode ☎ glyph rendered as an emoji on some Androids. */
-function PhoneIcon() {
-  return <Feather name="phone" size={20} color={COLORS.ink} />;
+// Single source of truth for the stage list. Each entry is one row in the
+// checklist; `gateStage` is the EARLIEST backend stage at which the row is
+// considered "active or completed" — so as the worker advances, more rows
+// flip from pending → active → done. The order MUST match the backend
+// stage progression in api/services/Agent.js.
+const STAGE_ROWS: Array<{
+  gateStage: 'parsing' | 'designing' | 'translating' | 'deploying';
+  label: string;
+  hint: string;
+}> = [
+  {
+    gateStage: 'parsing',
+    label: 'Business details parsed',
+    hint: 'Aapki baat samjh raha hoon',
+  },
+  {
+    gateStage: 'designing',
+    label: 'Assistant designed',
+    hint: 'Tone aur script taiyaar',
+  },
+  {
+    gateStage: 'translating',
+    label: 'Bhaasha configured',
+    hint: 'Multi-language support added',
+  },
+  {
+    gateStage: 'deploying',
+    label: 'Calling line assigned',
+    hint: 'Phone number reserved',
+  },
+];
+
+const STAGE_INDEX: Record<'parsing' | 'designing' | 'translating' | 'deploying' | 'ready', number> = {
+  parsing: 0,
+  designing: 1,
+  translating: 2,
+  deploying: 3,
+  ready: 4,
+};
+
+type RowState = 'done' | 'active' | 'pending';
+
+/**
+ * Map the backend's current creationStage to per-row state.
+ *
+ *   parsing   → row0 active, rows1-3 pending
+ *   designing → row0 done, row1 active, rows2-3 pending
+ *   translating → rows0-1 done, row2 active, row3 pending
+ *   deploying → rows0-2 done, row3 active
+ *   ready     → all done
+ */
+function rowStatesForStage(
+  stage: 'parsing' | 'designing' | 'translating' | 'deploying' | 'ready',
+): RowState[] {
+  const currentIdx = STAGE_INDEX[stage];
+  return STAGE_ROWS.map((_, idx) => {
+    if (idx < currentIdx) return 'done';
+    if (idx === currentIdx) return 'active';
+    return 'pending';
+  });
 }
 
 export default function AgentPreviewScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, next } = useLocalSearchParams<{ id: string; next?: string }>();
   const setUser = useAuthStore((s) => s.setUser);
+
+  // The ?next param picks the post-ready destination. Anything that's
+  // 'home' OR 'campaign' triggers the auto-continue checklist branch;
+  // they just route to different places when ready. No param → the
+  // direct-entry summary layout.
+  const autoContinueToCampaign = next === 'campaign';
+  const autoContinueToHome = next === 'home';
+  const autoContinue = autoContinueToCampaign || autoContinueToHome;
 
   const [agent, setAgent] = useState<Agent | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [timedOut, setTimedOut] = useState(false);
 
-  // Track whether we've already flipped onboardingDone — avoids spamming the
-  // store on every poll once status === 'ready'.
+  // Track whether we've already flipped onboardingDone (defensive backstop;
+  // the flag is now primarily set in profile-setup) and whether we've
+  // already kicked off the auto-continue redirect.
   const onboardingMarked = useRef(false);
+  const autoContinueScheduled = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,22 +173,33 @@ export default function AgentPreviewScreen() {
         if (cancelled) return;
         setAgent(res.agent);
 
-        const status = res.agent.status || 'ready'; // backend defaults; treat undefined as ready
+        const status = res.agent.status || 'ready';
 
         if (status === 'ready') {
-          // First time we observe ready: mark onboarding complete. The user
-          // can now safely land on /(tabs) on subsequent app opens.
           if (!onboardingMarked.current) {
             onboardingMarked.current = true;
             setUser({ onboardingDone: true });
           }
+          // Auto-continue path: brief pause on success state then route
+          // away. Destination depends on the entry mode — see the comment
+          // block at the top of the file.
+          if (autoContinue && !autoContinueScheduled.current) {
+            autoContinueScheduled.current = true;
+            setTimeout(() => {
+              if (cancelled) return;
+              if (autoContinueToHome) {
+                router.replace('/(tabs)');
+              } else if (autoContinueToCampaign) {
+                router.replace('/campaigns/new');
+              }
+            }, READY_HOLD_MS);
+          }
           return; // stop polling
         }
         if (status === 'failed') {
-          return; // stop polling, failed-state UI takes over
+          return;
         }
 
-        // Still 'creating' — schedule next poll if under cap.
         polls += 1;
         if (polls >= MAX_POLLS) {
           setTimedOut(true);
@@ -141,7 +207,7 @@ export default function AgentPreviewScreen() {
         }
         timeoutId = setTimeout(poll, POLL_INTERVAL_MS);
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Could not load your agent.');
+        if (!cancelled) setError(e?.message || 'Could not load your assistant.');
       }
     }
 
@@ -151,9 +217,22 @@ export default function AgentPreviewScreen() {
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [id, setUser]);
+  }, [id, setUser, autoContinue, autoContinueToHome, autoContinueToCampaign, router]);
 
-  // ---------- Hard error (network / 404) ----------
+  // Compute the current stage for the checklist. Treat null/undefined as
+  // 'parsing' so the checklist shows progress from the very first poll,
+  // even before the worker has written creationStage yet.
+  const currentStage = useMemo<'parsing' | 'designing' | 'translating' | 'deploying' | 'ready'>(() => {
+    if (!agent) return 'parsing';
+    if ((agent.status || 'ready') === 'ready') return 'ready';
+    return (agent.creationStage && agent.creationStage !== 'ready'
+      ? agent.creationStage
+      : 'parsing') as 'parsing' | 'designing' | 'translating' | 'deploying';
+  }, [agent]);
+
+  const rowStates = useMemo(() => rowStatesForStage(currentStage), [currentStage]);
+
+  // ─────────────── Hard error ───────────────
   if (error) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -166,23 +245,8 @@ export default function AgentPreviewScreen() {
     );
   }
 
-  // ---------- First fetch hasn't returned yet ----------
-  if (!agent) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <StageDots />
-        <View style={styles.stageCopyBlock}>
-          <Text style={styles.stageHi}>Aapka assistant taiyaar kar raha hoon…</Text>
-          <Text style={styles.stageEn}>Setting things up…</Text>
-        </View>
-      </View>
-    );
-  }
-
-  const status = agent.status || 'ready';
-
-  // ---------- Failed: worker errored ----------
-  if (status === 'failed') {
+  // ─────────────── Failed worker ───────────────
+  if (agent && agent.status === 'failed') {
     return (
       <View style={[styles.container, styles.centerContent]}>
         <Text style={styles.failedTitleHi}>Setup poora nahi ho paaya</Text>
@@ -191,139 +255,120 @@ export default function AgentPreviewScreen() {
           {agent.error
             || "Ek baar aur try karein — agar phir bhi nahi hua toh hum madad karenge."}
         </Text>
-        <Text style={styles.failedSubtitleEn}>
-          Try again — if it still doesn't work, we'll help.
-        </Text>
         <TouchableOpacity
           style={styles.primaryButton}
-          onPress={() => router.replace('/profile-setup')}
+          onPress={() => router.replace('/(tabs)')}
         >
-          <Text style={styles.primaryButtonText}>Try again</Text>
+          <Text style={styles.primaryButtonText}>Back to home</Text>
         </TouchableOpacity>
-
-        {/* Escape hatch: even with a failed agent row, the importer screen
-            handles the agent-failed state via its own banner — so we still
-            offer the user a parallel-work path. */}
-        {agent.id ? (
-          <TouchableOpacity
-            style={[styles.importCta, { marginTop: 12, alignSelf: 'stretch' }]}
-            onPress={() => router.push(`/contacts/import?agentId=${agent.id}`)}
-          >
-            <Text style={styles.importCtaHi}>Contacts add karein</Text>
-            <Text style={styles.importCtaEn}>Add contacts in the meantime</Text>
-          </TouchableOpacity>
-        ) : null}
       </View>
     );
   }
 
-  // ---------- Creating: staged loading state ----------
-  if (status === 'creating') {
-    // Map backend creationStage → bilingual copy. Undefined / null / unknown
-    // values fall back to 'parsing' (earliest stage) so the user sees friendly
-    // copy from the very first poll, before the worker has written anything.
-    const stage = agent.creationStage && agent.creationStage !== 'ready'
-      ? agent.creationStage
-      : 'parsing';
-
-    const STAGE_COPY: Record<
-      'parsing' | 'designing' | 'translating' | 'deploying',
-      { hi: string; en: string }
-    > = {
-      parsing: {
-        hi: 'Aapki baat samjh raha hoon…',
-        en: 'Understanding your business…',
-      },
-      designing: {
-        hi: 'Aapka assistant taiyaar kar raha hoon…',
-        en: 'Designing your assistant…',
-      },
-      translating: {
-        hi: 'Hindi, Tamil, Bengali — sab mein baat karna sikha raha hoon…',
-        en: 'Teaching it to switch languages…',
-      },
-      deploying: {
-        hi: 'Phone number assign kar raha hoon…',
-        en: 'Reserving your phone number…',
-      },
-    };
-
-    const copy = STAGE_COPY[stage as keyof typeof STAGE_COPY] || STAGE_COPY.parsing;
-
-    // designing + translating reveal the agent name once the LLM has parsed it.
-    const showNameReveal =
-      !!agent.name && (stage === 'designing' || stage === 'translating');
-
+  // ─────────────── Auto-continue branch (came from /agents/new or Create campaign) ───────────────
+  // While creating OR briefly on ready, render the checklist. Once auto-
+  // continue fires we've already scheduled router.replace, so we just
+  // keep rendering the checklist (with all rows checked) until the
+  // navigation completes. The ready-state subtitle adapts to the
+  // destination so the user knows where they're about to land.
+  if (autoContinue) {
+    const readySubtitle = autoContinueToCampaign
+      ? 'Setting up your campaign next…'
+      : 'Aap home par wapas ja rahe hain…';
     return (
-      <View style={[styles.container, styles.creatingContainer]}>
-        {/* Name reveal — designing / translating stages only, after the LLM has
-            populated agent.name. Gives the user something of theirs to anchor
-            on while the rest provisions. */}
-        {showNameReveal ? (
-          <View style={styles.namePreview}>
-            <Text style={styles.namePreviewLabel}>Aapka assistant</Text>
-            <Text style={styles.namePreviewName}>{agent.name}</Text>
+      <View style={styles.container}>
+        <View style={styles.stageContainer}>
+          <View style={styles.stageHeader}>
+            <Text style={styles.stageEyebrow}>Aapka assistant</Text>
+            <Text style={styles.stageTitle}>
+              {currentStage === 'ready'
+                ? 'Taiyaar hai!'
+                : 'Taiyaar ho raha hai…'}
+            </Text>
+            <Text style={styles.stageSubtitle}>
+              {currentStage === 'ready'
+                ? readySubtitle
+                : 'Pehli baar thoda time lagta hai. Setting up your AI assistant…'}
+            </Text>
           </View>
-        ) : null}
 
-        {/* Translating stage shows a row of language chips between name and dots */}
-        {stage === 'translating' ? (
-          <View style={styles.langChipRow}>
-            <Text style={styles.langChip}>Hindi</Text>
-            <Text style={styles.langChip}>Tamil</Text>
-            <Text style={styles.langChip}>Bengali</Text>
-            <Text style={styles.langChip}>+ 7</Text>
+          <View style={styles.stageList}>
+            {STAGE_ROWS.map((row, idx) => (
+              <StageItem
+                key={row.gateStage}
+                state={rowStates[idx]}
+                label={row.label}
+                hint={row.hint}
+              />
+            ))}
           </View>
-        ) : null}
 
-        {/* Deploying stage shows a phone-icon medallion above the dots */}
-        {stage === 'deploying' ? (
-          <View style={styles.deployIcon}>
-            <PhoneIcon />
-          </View>
-        ) : null}
-
-        <StageDots />
-
-        <View style={styles.stageCopyBlock}>
-          <Text style={styles.stageHi}>{copy.hi}</Text>
-          <Text style={styles.stageEn}>{copy.en}</Text>
+          {timedOut ? (
+            <View style={styles.timedOutBlock}>
+              <Text style={styles.timedOutText}>
+                Thoda aur waqt lag raha hai. Aap thodi der mein wapas aa
+                sakte hain.
+              </Text>
+              <TouchableOpacity
+                style={[styles.primaryButton, { marginTop: 12 }]}
+                onPress={() => router.replace('/(tabs)')}
+              >
+                <Text style={styles.primaryButtonText}>Continue to home</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
-
-        {/* Escape hatch: user can start importing contacts in parallel while
-            the agent finishes provisioning. Always shown during creating —
-            agent.id is the stub-row id, available from the very first poll. */}
-        {agent.id ? (
-          <TouchableOpacity
-            style={[styles.importCta, styles.importCtaCreating]}
-            onPress={() => router.push(`/contacts/import?agentId=${agent.id}`)}
-          >
-            <Text style={styles.importCtaHi}>Contacts add karein</Text>
-            <Text style={styles.importCtaEn}>Add contacts in the meantime</Text>
-          </TouchableOpacity>
-        ) : null}
-
-        {timedOut ? (
-          <View style={styles.timedOutBlock}>
-            <Text style={styles.timedOutText}>
-              Thoda aur waqt lag raha hai. Aap thodi der mein wapas aa sakte hain.
-            </Text>
-            <Text style={styles.timedOutSubText}>
-              Still working in the background — feel free to come back in a moment.
-            </Text>
-            <TouchableOpacity
-              style={[styles.primaryCta, { marginTop: 16 }]}
-              onPress={() => router.replace('/(tabs)')}
-            >
-              <Text style={styles.primaryCtaHi}>Continue to home</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
       </View>
     );
   }
 
-  // ---------- Ready: the existing happy-path layout ----------
+  // ─────────────── Direct entry (tapped agent card) ───────────────
+  // Mirror the auto-continue checklist while creating, but on ready render
+  // the full agent summary + CTA stack so the user can review and act.
+
+  if (!agent || (agent.status || 'ready') === 'creating') {
+    return (
+      <View style={styles.container}>
+        <View style={styles.stageContainer}>
+          <View style={styles.stageHeader}>
+            <Text style={styles.stageEyebrow}>Aapka assistant</Text>
+            <Text style={styles.stageTitle}>Taiyaar ho raha hai…</Text>
+            <Text style={styles.stageSubtitle}>
+              Pehli baar thoda time lagta hai. Setting up your AI assistant…
+            </Text>
+          </View>
+
+          <View style={styles.stageList}>
+            {STAGE_ROWS.map((row, idx) => (
+              <StageItem
+                key={row.gateStage}
+                state={rowStates[idx]}
+                label={row.label}
+                hint={row.hint}
+              />
+            ))}
+          </View>
+
+          {timedOut ? (
+            <View style={styles.timedOutBlock}>
+              <Text style={styles.timedOutText}>
+                Thoda aur waqt lag raha hai. Aap thodi der mein wapas aa
+                sakte hain.
+              </Text>
+              <TouchableOpacity
+                style={[styles.primaryButton, { marginTop: 12 }]}
+                onPress={() => router.replace('/(tabs)')}
+              >
+                <Text style={styles.primaryButtonText}>Continue to home</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </View>
+      </View>
+    );
+  }
+
+  // ─────────────── Ready (direct entry) — full summary + CTA stack ───────────────
   const s = agent.summaryNL || {};
   const outcomes = Array.isArray(s.possibleOutcomes) ? s.possibleOutcomes : [];
   const extras   = Array.isArray(s.suggestedExtraFields) ? s.suggestedExtraFields : [];
@@ -381,32 +426,14 @@ export default function AgentPreviewScreen() {
       </ScrollView>
 
       <View style={styles.ctaStack}>
-        {/* Primary post-author CTA: jump straight into importing the user's
-            contacts so they can run real outbound calls. router.push (not
-            replace) so back returns here. */}
         <TouchableOpacity
           style={styles.primaryCta}
-          onPress={() => router.push(`/contacts/import?agentId=${agent.id}`)}
+          onPress={() => router.push('/campaigns/new')}
         >
-          <Text style={styles.primaryCtaHi}>Apne customers ko call karein</Text>
-          <Text style={styles.primaryCtaEn}>Call your people</Text>
+          <Text style={styles.primaryCtaHi}>Naya campaign banayein</Text>
+          <Text style={styles.primaryCtaEn}>Create a campaign</Text>
         </TouchableOpacity>
 
-        {/* Persistent "Add contacts in the meantime" escape hatch. On the ready
-            state the primary CTA already points to the importer, but we keep
-            this here for visual + behavioural consistency with the loading and
-            failed states (a user landing here from the home card sees the
-            same option in the same place regardless of agent status). */}
-        <TouchableOpacity
-          style={styles.importCta}
-          onPress={() => router.push(`/contacts/import?agentId=${agent.id}`)}
-        >
-          <Text style={styles.importCtaHi}>Contacts add karein</Text>
-          <Text style={styles.importCtaEn}>Add contacts in the meantime</Text>
-        </TouchableOpacity>
-
-        {/* Demoted from primary — still useful for someone who wants to hear
-            their assistant before sending it to real customers. */}
         <TouchableOpacity
           style={styles.secondaryCta}
           onPress={() => router.push(`/agents/${agent.id}/test-call`)}
@@ -420,8 +447,56 @@ export default function AgentPreviewScreen() {
           style={styles.tertiaryCta}
           onPress={() => router.replace('/(tabs)')}
         >
-          <Text style={styles.tertiaryCtaText}>Looks good — continue</Text>
+          <Text style={styles.tertiaryCtaText}>Back to home</Text>
         </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Single row of the stage checklist. Three visual states:
+ *   - done    → filled ink circle with check, label dark
+ *   - active  → filled ink circle with dot, label dark, hint visible
+ *   - pending → outlined circle, label muted
+ */
+function StageItem({
+  state,
+  label,
+  hint,
+}: {
+  state: RowState;
+  label: string;
+  hint: string;
+}) {
+  return (
+    <View style={styles.stageRow}>
+      <View
+        style={[
+          styles.stageDot,
+          state === 'done' && styles.stageDotDone,
+          state === 'active' && styles.stageDotActive,
+          state === 'pending' && styles.stageDotPending,
+        ]}
+      >
+        {state === 'done' ? (
+          <Feather name="check" size={11} color={COLORS.textOnInk} />
+        ) : state === 'active' ? (
+          <View style={styles.stageInnerDot} />
+        ) : null}
+      </View>
+      <View style={styles.stageRowCopy}>
+        <Text
+          style={[
+            styles.stageRowLabel,
+            state === 'pending' && styles.stageRowLabelPending,
+          ]}
+        >
+          {label}
+        </Text>
+        {state === 'active' ? (
+          <Text style={styles.stageRowHint}>{hint}</Text>
+        ) : null}
       </View>
     </View>
   );
@@ -431,123 +506,100 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   centerContent: { justifyContent: 'center', alignItems: 'center', padding: 24 },
 
-  // ---- Loading / staged states ----
-  creatingContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 24,
+  // ─── Single-screen stage checklist ───
+  stageContainer: {
+    flex: 1,
+    paddingHorizontal: 28,
+    paddingTop: 80,
+    paddingBottom: 32,
   },
-
-  // Three pulsing dots — 8px round, 6px gap, primary ink at three opacities.
-  dotsRow: {
-    flexDirection: 'row',
-    gap: 6,
-    alignItems: 'center',
-    marginBottom: 14,
+  stageHeader: {
+    marginBottom: 28,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.primary,
-  },
-
-  // Stage copy block — Hindi big, English small/secondary, both centered.
-  stageCopyBlock: {
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    gap: 6,
-  },
-  stageHi: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: COLORS.text,
-    textAlign: 'center',
-    lineHeight: 18 * 1.45,
-    maxWidth: 226,
-  },
-  stageEn: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 13 * 1.45,
-    maxWidth: 226,
-  },
-
-  // Name reveal — designing / translating stages only.
-  namePreview: {
-    alignItems: 'center',
-    marginBottom: 22,
-  },
-  namePreviewLabel: {
+  stageEyebrow: {
     fontSize: 11,
     fontWeight: '500',
     color: COLORS.textMuted,
     marginBottom: 4,
   },
-  namePreviewName: {
-    fontSize: 24,
+  stageTitle: {
+    fontSize: 22,
     fontWeight: '500',
     color: COLORS.text,
-    textAlign: 'center',
+    marginBottom: 6,
+  },
+  stageSubtitle: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 13 * 1.55,
   },
 
-  // Translating-stage chips row.
-  langChipRow: {
+  stageList: {
+    gap: 14,
+  },
+  stageRow: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 22,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
+    alignItems: 'flex-start',
+    gap: 12,
   },
-  langChip: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: COLORS.ink,
-    backgroundColor: COLORS.primaryLight,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-
-  // Deploying-stage phone medallion.
-  deployIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: COLORS.primaryLight,
+  stageDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginTop: 2,
   },
-  phoneIconGlyph: {
-    fontSize: 20,
-    color: COLORS.ink,
-    lineHeight: 22,
+  stageDotDone: {
+    backgroundColor: COLORS.ink,
   },
-
-  // Timed-out block — appears below the dots once polling caps out.
-  timedOutBlock: {
-    marginTop: 32,
-    alignItems: 'center',
-    paddingHorizontal: 12,
+  stageDotActive: {
+    backgroundColor: COLORS.ink,
   },
-  timedOutText: {
+  stageDotPending: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  // Centered inner pip on the active row — communicates "in progress"
+  // distinct from the check on done rows.
+  stageInnerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.cream,
+  },
+  stageRowCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  stageRowLabel: {
     fontSize: 14,
     fontWeight: '500',
     color: COLORS.text,
-    textAlign: 'center',
   },
-  timedOutSubText: {
+  stageRowLabelPending: {
+    color: COLORS.textMuted,
+    fontWeight: '400',
+  },
+  stageRowHint: {
     fontSize: 12,
     color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
+    lineHeight: 12 * 1.45,
   },
 
-  // ---- Ready state ----
+  timedOutBlock: {
+    marginTop: 32,
+    alignItems: 'center',
+  },
+  timedOutText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 13 * 1.55,
+  },
+
+  // ─── Ready state (direct entry) ───
   readyScroll: { flex: 1 },
   readyScrollContent: {
     padding: 24,
@@ -613,7 +665,6 @@ const styles = StyleSheet.create({
     lineHeight: 12 * 1.45,
   },
 
-  // ---- CTA stack — pinned to the bottom of the screen ----
   ctaStack: {
     paddingHorizontal: 24,
     paddingBottom: 24,
@@ -659,44 +710,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Outlined "Add contacts in the meantime" CTA — visible on every state so
-  // the user is never trapped staring at loading copy. Mirrors the bilingual
-  // stack of the primary CTA (Hi 13/500, En 11/400 @ 0.7) but outlined so it
-  // doesn't compete visually with the primary action.
-  importCta: {
-    marginTop: 8,
-    borderWidth: 0.5,
-    borderColor: COLORS.borderSoft,
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  importCtaHi: {
-    color: COLORS.text,
-    fontSize: 13,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  importCtaEn: {
-    color: COLORS.text,
-    fontSize: 11,
-    fontWeight: '400',
-    opacity: 0.7,
-    textAlign: 'center',
-    marginTop: 3,
-  },
-  // On centered loading layouts (creatingContainer) we stretch the CTA to
-  // a comfortable thumb-width and push it well below the staged copy so it
-  // doesn't crowd the dots/copy block.
-  importCtaCreating: {
-    marginTop: 24,
-    alignSelf: 'stretch',
-    marginHorizontal: 12,
-  },
-
   tertiaryCta: {
     marginTop: 8,
     paddingVertical: 6,
@@ -708,7 +721,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
 
-  // ---- Error / failed states ----
+  // ─── Error / failed ───
   errorTitle: {
     fontSize: 20,
     fontWeight: '500',
@@ -734,12 +747,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
     marginBottom: 16,
-  },
-  failedSubtitleEn: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginBottom: 20,
   },
 
   primaryButton: {
