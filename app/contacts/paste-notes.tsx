@@ -73,7 +73,12 @@ type EditableRow = {
 
 export default function PasteNotesScreen() {
   const router = useRouter();
-  const fetchContacts = useContactStore((s) => s.contacts && (() => {})); // we'll trigger refresh after bulk
+  // Note: contact-store refresh after bulk happens via
+  // `useContactStore.getState().setContacts(...)` directly in the submit
+  // handler below — no hook subscription needed here. (The previous version
+  // had `useContactStore((s) => s.contacts && (() => {}))` which produced a
+  // fresh function literal on every render, triggering an infinite re-render
+  // loop with "Maximum update depth exceeded".)
 
   const [text, setText] = useState('');
   const [language, setLanguage] = useState<'en' | 'hi' | 'hinglish'>('hinglish');

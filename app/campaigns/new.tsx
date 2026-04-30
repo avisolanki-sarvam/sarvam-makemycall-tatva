@@ -38,6 +38,32 @@ const newRow = (): KVRow => ({ key: '', value: '' });
 const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const isValidHHMM = (s: string) => HHMM_RE.test(s);
 
+// Lenient time-input normalizer. Accepts flexible user-entered shapes and
+// returns a canonical "HH:MM" or null:
+//
+//   "8"      → "08:00"
+//   "08"     → "08:00"
+//   "8:0"    → "08:00"
+//   "8:30"   → "08:30"
+//   "08:00"  → "08:00"
+//   "23:45"  → "23:45"
+//   "abc"    → null
+//   "25:00"  → null  (out of range)
+//
+// Used in commit handlers + the step-ready gate so the user can type just
+// "8" and "10" without the input slamming back to the default on blur.
+function normalizeTimeInput(raw: string): string | null {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const min = m[2] === undefined ? 0 : parseInt(m[2], 10);
+  if (!Number.isFinite(h) || h < 0 || h > 23) return null;
+  if (!Number.isFinite(min) || min < 0 || min > 59) return null;
+  return `${h.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+}
+
 // Agent-validate envelope shape. Mirrors the importer's local interface so
 // call sites don't need a shared types module for this one boolean.
 interface ValidateData {
@@ -348,19 +374,24 @@ export default function NewCampaignScreen() {
 
   // ------------------------------------------------------------------ Schedule step
 
-  // Time inputs commit to the draft on blur if and only if the value is a
-  // valid HH:MM string. Otherwise we revert the local mirror to what's in
-  // the store, so the user always sees a valid value when not focused.
+  // Time inputs commit to the draft on blur. We accept lenient input shapes
+  // ("8", "08", "8:30") via normalizeTimeInput, then write the canonical
+  // "HH:MM" form back into both the local mirror AND the draft. Only fully
+  // un-parseable values revert to the previous draft value.
   const commitStartTime = () => {
-    if (isValidHHMM(startTimeText)) {
-      draft.patchAllowedWindow({ startTime: startTimeText });
+    const normalized = normalizeTimeInput(startTimeText);
+    if (normalized) {
+      setStartTimeText(normalized);
+      draft.patchAllowedWindow({ startTime: normalized });
     } else {
       setStartTimeText(draft.allowedWindow.startTime);
     }
   };
   const commitEndTime = () => {
-    if (isValidHHMM(endTimeText)) {
-      draft.patchAllowedWindow({ endTime: endTimeText });
+    const normalized = normalizeTimeInput(endTimeText);
+    if (normalized) {
+      setEndTimeText(normalized);
+      draft.patchAllowedWindow({ endTime: normalized });
     } else {
       setEndTimeText(draft.allowedWindow.endTime);
     }
@@ -368,12 +399,14 @@ export default function NewCampaignScreen() {
 
   // Gate the Next button on:
   //   - if "later" picked, scheduledAt must be set
-  //   - both time inputs must be valid HH:MM
+  //   - both time inputs must normalise to a valid HH:MM
   //   - end > start (string compare works for fixed-width HH:MM)
+  const normalizedStart = normalizeTimeInput(startTimeText);
+  const normalizedEnd   = normalizeTimeInput(endTimeText);
   const scheduleStepReady =
-    isValidHHMM(startTimeText) &&
-    isValidHHMM(endTimeText) &&
-    startTimeText < endTimeText &&
+    !!normalizedStart &&
+    !!normalizedEnd &&
+    normalizedStart < normalizedEnd &&
     !(draft.scheduleMode === 'later' && !draft.scheduledAt);
 
   const renderScheduleStep = () => (
@@ -430,7 +463,7 @@ export default function NewCampaignScreen() {
             <TextInput
               style={[
                 styles.timeInput,
-                !isValidHHMM(startTimeText) && styles.timeInputInvalid,
+                !normalizedStart && styles.timeInputInvalid,
               ]}
               value={startTimeText}
               onChangeText={setStartTimeText}
@@ -447,7 +480,7 @@ export default function NewCampaignScreen() {
             <TextInput
               style={[
                 styles.timeInput,
-                !isValidHHMM(endTimeText) && styles.timeInputInvalid,
+                !normalizedEnd && styles.timeInputInvalid,
               ]}
               value={endTimeText}
               onChangeText={setEndTimeText}
@@ -461,11 +494,11 @@ export default function NewCampaignScreen() {
           </View>
         </View>
         <Text style={styles.windowHint}>
-          Time format: 24h, HH:MM. Timezone: Asia/Kolkata.
+          Type the hour like 8 or 08 — we'll normalise to HH:MM. Timezone: Asia/Kolkata.
         </Text>
-        {isValidHHMM(startTimeText) &&
-          isValidHHMM(endTimeText) &&
-          startTimeText >= endTimeText && (
+        {normalizedStart &&
+          normalizedEnd &&
+          normalizedStart >= normalizedEnd && (
             <Text style={styles.windowError}>End time must be after start time.</Text>
           )}
       </View>
