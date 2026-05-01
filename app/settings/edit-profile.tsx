@@ -29,6 +29,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../src/services/api';
 import { useAuthStore } from '../../src/stores/authStore';
 import { COLORS } from '../../src/constants/api';
@@ -61,6 +62,7 @@ interface UpdateProfileResponse {
 
 export default function EditProfileScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const setUserInStore = useAuthStore((s) => s.setUser);
 
   const [loading, setLoading] = useState(true);
@@ -80,7 +82,7 @@ export default function EditProfileScreen() {
         setBusinessDesc(res.businessDesc ?? '');
       } catch (err: any) {
         if (!cancelled) {
-          Alert.alert('Could not load profile', err?.message || 'Try again later.');
+          Alert.alert(t('editProfile.alerts.loadFailedTitle'), err?.message || t('common.tryAgainLater'));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -119,11 +121,11 @@ export default function EditProfileScreen() {
         businessName: res.user.businessName ?? undefined,
         businessDesc: trimmedDesc || null,
       });
-      Alert.alert('Saved', 'Your business profile has been updated.', [
+      Alert.alert(t('editProfile.alerts.savedTitle'), t('editProfile.alerts.savedBody'), [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (err: any) {
-      Alert.alert('Could not save', err?.message || 'Try again later.');
+      Alert.alert(t('editProfile.alerts.saveFailedTitle'), err?.message || t('common.tryAgainLater'));
     } finally {
       setSaving(false);
     }
@@ -143,47 +145,45 @@ export default function EditProfileScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Edit business profile</Text>
+        <Text style={styles.title}>{t('editProfile.title')}</Text>
         <Text style={styles.subtitle}>
-          These details show up on the home screen and inform the agent's tone.
-          Editing them here does NOT create a new agent.
+          {t('editProfile.subtitle')}
         </Text>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Your name</Text>
+          <Text style={styles.label}>{t('editProfile.nameLabel')}</Text>
           <TextInput
             style={styles.input}
             value={name}
             onChangeText={setName}
-            placeholder="e.g. Avi Solanki"
+            placeholder={t('editProfile.namePlaceholder')}
             placeholderTextColor={COLORS.textMuted}
             returnKeyType="next"
           />
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Business name</Text>
+          <Text style={styles.label}>{t('editProfile.businessLabel')}</Text>
           <TextInput
             style={styles.input}
             value={businessName}
             onChangeText={setBusinessName}
-            placeholder="e.g. Sharma Kirana Store"
+            placeholder={t('editProfile.businessPlaceholder')}
             placeholderTextColor={COLORS.textMuted}
             returnKeyType="next"
           />
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>What does your business do?</Text>
+          <Text style={styles.label}>{t('editProfile.descLabel')}</Text>
           <Text style={styles.helper}>
-            A short description of your business. The agent uses this for context
-            when speaking with your customers.
+            {t('editProfile.descHint')}
           </Text>
           <TextInput
             style={[styles.input, styles.multiline]}
             value={businessDesc}
             onChangeText={setBusinessDesc}
-            placeholder="e.g. I run a small kirana store in Bengaluru. We sell groceries and household items..."
+            placeholder={t('editProfile.descPlaceholder')}
             placeholderTextColor={COLORS.textMuted}
             multiline
             numberOfLines={6}
@@ -199,12 +199,12 @@ export default function EditProfileScreen() {
           {saving ? (
             <ActivityIndicator color={COLORS.textOnInk} />
           ) : (
-            <Text style={styles.saveText}>Save changes</Text>
+            <Text style={styles.saveText}>{t('editProfile.saveChanges')}</Text>
           )}
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.cancelBtn} onPress={() => router.back()}>
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{t('common.cancel')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>

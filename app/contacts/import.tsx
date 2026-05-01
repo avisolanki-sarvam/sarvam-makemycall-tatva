@@ -66,10 +66,12 @@ import { AudioModule, useAudioRecorder, RecordingPresets } from 'expo-audio';
 // expo-file-system v19 split: legacy readAsStringAsync still lives in /legacy.
 // Used to base64 the recorded audio + the picked image.
 import * as FileSystem from 'expo-file-system/legacy';
-import { Feather } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
+import { CaretLeftIcon, CheckIcon, UsersIcon } from 'phosphor-react-native';
 import { api, readEnvelope } from '../../src/services/api';
 import { COLORS } from '../../src/constants/api';
 import { loadDeviceContacts, type DeviceContact } from '../../src/services/contactImport';
+import { TatvaIcon, type TatvaIconName } from '../../src/components/TatvaIcon';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -145,9 +147,6 @@ const MIN_RECORDING_SECONDS = 2;
 // brief tail). Going batch would require async polling — out of scope for v1.
 const MAX_RECORDING_SECONDS = 28;
 
-const PASTE_PLACEHOLDER =
-  'Sharma ji 9876543210, Ramesh 8765432109 — 1500 baaki, Auntie ji 7654321098';
-
 const MONOSPACE = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
 
 // Live-banner polling cadence. Mirrors /agent-preview/[id]: one GET every 2s
@@ -180,27 +179,28 @@ const READY_CONFIRMATION_MS = 3000;
 
 type BannerStage = 'parsing' | 'designing' | 'translating' | 'deploying';
 
-const BANNER_STAGE_COPY: Record<BannerStage, { hi: string; en: string }> = {
+const BANNER_STAGE_KEYS: Record<BannerStage, { title: string; sub: string }> = {
   parsing: {
-    hi: 'Aapka assistant samjha raha hoon...',
-    en: 'Reading your business...',
+    title: 'contacts.stageBanner.stage1Title',
+    sub: 'contacts.stageBanner.stage1Sub',
   },
   designing: {
-    hi: 'Aapka assistant taiyaar kar raha hoon...',
-    en: 'Designing your assistant...',
+    title: 'contacts.stageBanner.stage2Title',
+    sub: 'contacts.stageBanner.stage2Sub',
   },
   translating: {
-    hi: 'Hindi, Tamil mein bolna sikha raha hoon...',
-    en: 'Teaching it to switch languages...',
+    title: 'contacts.stageBanner.stage3Title',
+    sub: 'contacts.stageBanner.stage3Sub',
   },
   deploying: {
-    hi: 'Phone number assign kar raha hoon...',
-    en: 'Reserving your phone number...',
+    title: 'contacts.stageBanner.stage4Title',
+    sub: 'contacts.stageBanner.stage4Sub',
   },
 };
 
 function AgentCreationBanner({ agentId }: { agentId: string }) {
   const router = useRouter();
+  const { t } = useTranslation();
   const [agent, setAgent] = useState<AgentLite | null>(null);
   const [timedOut, setTimedOut] = useState(false);
   // showReadyConfirmation lingers for READY_CONFIRMATION_MS once we observe
@@ -298,7 +298,7 @@ function AgentCreationBanner({ agentId }: { agentId: string }) {
         <View style={[bannerStyles.dot, bannerStyles.dotFailed]} />
         <View style={bannerStyles.textBlock}>
           <Text style={[bannerStyles.textHi, bannerStyles.textFailed]}>
-            Setup nahi ho paaya. Re-create karein →
+            {t('contacts.stageBanner.failed')}
           </Text>
         </View>
       </TouchableOpacity>
@@ -307,7 +307,7 @@ function AgentCreationBanner({ agentId }: { agentId: string }) {
 
   // Ready confirmation: green check, fades after 3s.
   if (showReadyConfirmation) {
-    const name = (agent?.name || '').trim() || 'Aapka assistant';
+    const name = (agent?.name || '').trim() || t('contacts.stageBanner.readyFallback');
     return (
       <TouchableOpacity
         style={[bannerStyles.bar, bannerStyles.barReady]}
@@ -317,7 +317,7 @@ function AgentCreationBanner({ agentId }: { agentId: string }) {
         <View style={[bannerStyles.dot, bannerStyles.dotReady]} />
         <View style={bannerStyles.textBlock}>
           <Text style={[bannerStyles.textHi, bannerStyles.textReady]}>
-            ✓ {name} taiyaar hai
+            {t('contacts.stageBanner.ready', { name })}
           </Text>
         </View>
       </TouchableOpacity>
@@ -333,10 +333,10 @@ function AgentCreationBanner({ agentId }: { agentId: string }) {
         onPress={() => router.push(`/agent-preview/${agentId}`)}
         activeOpacity={0.7}
       >
-        <ActivityIndicator size="small" color={COLORS.textSecondary} />
+        <TatvaIcon name="loader" size="md" color={COLORS.textSecondary} spin />
         <View style={bannerStyles.textBlock}>
-          <Text style={bannerStyles.textHi}>Setup background mein chal raha hai</Text>
-          <Text style={bannerStyles.textEn}>Taking longer than expected</Text>
+          <Text style={bannerStyles.textHi}>{t('contacts.stageBanner.timedOutTitle')}</Text>
+          <Text style={bannerStyles.textEn}>{t('contacts.stageBanner.timedOutSub')}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -346,7 +346,7 @@ function AgentCreationBanner({ agentId }: { agentId: string }) {
   const rawStage = agent?.creationStage;
   const stage: BannerStage =
     rawStage && rawStage !== 'ready' ? (rawStage as BannerStage) : 'parsing';
-  const copy = BANNER_STAGE_COPY[stage] || BANNER_STAGE_COPY.parsing;
+  const keys = BANNER_STAGE_KEYS[stage] || BANNER_STAGE_KEYS.parsing;
 
   return (
     <TouchableOpacity
@@ -354,10 +354,10 @@ function AgentCreationBanner({ agentId }: { agentId: string }) {
       onPress={() => router.push(`/agent-preview/${agentId}`)}
       activeOpacity={0.7}
     >
-      <ActivityIndicator size="small" color={COLORS.textSecondary} />
+      <TatvaIcon name="loader" size="md" color={COLORS.textSecondary} spin />
       <View style={bannerStyles.textBlock}>
-        <Text style={bannerStyles.textHi}>{copy.hi}</Text>
-        <Text style={bannerStyles.textEn}>{copy.en}</Text>
+        <Text style={bannerStyles.textHi}>{t(keys.title)}</Text>
+        <Text style={bannerStyles.textEn}>{t(keys.sub)}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -423,6 +423,7 @@ const bannerStyles = StyleSheet.create({
 
 export default function ContactImportScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   // Both query params are optional now:
   //
   //   - agentId — when present, the screen offers BOTH "Save contacts" and
@@ -522,13 +523,17 @@ export default function ContactImportScreen() {
           // Surface the bilingual hint verbatim. Code lets us pick the right
           // recovery link ("Re-create" for missing-config errors, "Try again"
           // for transient ones).
-          setValidateError(env.hint || raw?.errors?.[0]?.hint || 'Agent is not ready.');
+          setValidateError(
+            env.hint ||
+              raw?.errors?.[0]?.hint ||
+              t('contacts.import.alerts.agentNotReadyFallback'),
+          );
           setValidateErrorCode(raw?.errors?.[0]?.code || null);
         }
       } catch (err: any) {
         if (cancelled) return;
         setValid(false);
-        setValidateError(err?.message || 'Could not check agent status.');
+        setValidateError(err?.message || t('contacts.import.alerts.couldNotCheckAgentBody'));
       } finally {
         if (!cancelled) setValidating(false);
       }
@@ -562,8 +567,8 @@ export default function ContactImportScreen() {
     const text = pasteText.trim();
     if (text.length < 3) {
       Alert.alert(
-        'Text chahiye',
-        'List paste karein — kuch toh likha ho.\n\nWe need some text — paste your list first.',
+        t('contacts.import.alerts.needTextTitle'),
+        t('contacts.import.alerts.needTextBody'),
       );
       return;
     }
@@ -576,8 +581,8 @@ export default function ContactImportScreen() {
       ingestParseResponse(res);
     } catch (err: any) {
       Alert.alert(
-        'Could not read list',
-        err?.message || 'Server rejected the parse. Try a smaller chunk.',
+        t('contacts.import.alerts.couldNotReadListTitle'),
+        err?.message || t('contacts.import.alerts.couldNotReadListBody'),
       );
     } finally {
       setLoading(false);
@@ -597,8 +602,8 @@ export default function ContactImportScreen() {
       ImagePicker = await import('expo-image-picker');
     } catch (err) {
       Alert.alert(
-        'Image picker unavailable',
-        'Photo mode needs a dev-client rebuild. Run `npx expo run:android` (or your EAS dev build) once and try again.',
+        t('contacts.import.alerts.imagePickerUnavailableTitle'),
+        t('contacts.import.alerts.imagePickerUnavailableBody'),
       );
       return;
     }
@@ -610,10 +615,10 @@ export default function ContactImportScreen() {
           : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
         Alert.alert(
-          'Permission needed',
+          t('contacts.import.alerts.permissionNeededTitle'),
           source === 'camera'
-            ? 'Camera permission denied — enable it in Settings to take photos.'
-            : 'Photos permission denied — enable it in Settings to pick from your gallery.',
+            ? t('contacts.import.alerts.cameraPermissionBody')
+            : t('contacts.import.alerts.photosPermissionBody'),
         );
         return;
       }
@@ -654,20 +659,29 @@ export default function ContactImportScreen() {
           });
           setPhotoBase64(b64);
         } catch (err: any) {
-          Alert.alert('Could not read image', err?.message || 'Try a different photo.');
+          Alert.alert(
+            t('contacts.import.alerts.couldNotReadImageTitle'),
+            err?.message || t('contacts.import.alerts.couldNotReadImageBody'),
+          );
           setPhotoUri(null);
           setPhotoBase64(null);
           setPhotoMime(null);
         }
       }
     } catch (err: any) {
-      Alert.alert('Photo failed', err?.message || 'Try again.');
+      Alert.alert(
+        t('contacts.import.alerts.photoFailedTitle'),
+        err?.message || t('contacts.import.alerts.tryAgainGeneric'),
+      );
     }
   };
 
   const submitPhoto = async () => {
     if (!photoBase64 || !photoMime) {
-      Alert.alert('Photo chahiye', 'Pick or take a photo first.');
+      Alert.alert(
+        t('contacts.import.alerts.needPhotoTitle'),
+        t('contacts.import.alerts.needPhotoBody'),
+      );
       return;
     }
     setLoading(true);
@@ -680,8 +694,8 @@ export default function ContactImportScreen() {
       ingestParseResponse(res);
     } catch (err: any) {
       Alert.alert(
-        'Could not read photo',
-        err?.message || 'Try a clearer photo or a different lighting.',
+        t('contacts.import.alerts.couldNotReadPhotoTitle'),
+        err?.message || t('contacts.import.alerts.couldNotReadPhotoBody'),
       );
     } finally {
       setLoading(false);
@@ -695,8 +709,8 @@ export default function ContactImportScreen() {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
       if (!perm.granted) {
         Alert.alert(
-          'Mic access needed',
-          'Microphone permission denied — enable it in Settings to dictate your list.',
+          t('contacts.import.alerts.micAccessTitle'),
+          t('contacts.import.alerts.micAccessBody'),
         );
         return;
       }
@@ -716,7 +730,10 @@ export default function ContactImportScreen() {
         });
       }, 1000);
     } catch (err: any) {
-      Alert.alert('Could not start recording', err?.message || 'Try again.');
+      Alert.alert(
+        t('contacts.import.alerts.couldNotStartRecordingTitle'),
+        err?.message || t('contacts.import.alerts.tryAgainGeneric'),
+      );
       setIsRecording(false);
     }
   };
@@ -735,17 +752,23 @@ export default function ContactImportScreen() {
       await audioRecorder.stop();
       fileUri = audioRecorder.uri;
     } catch (err: any) {
-      Alert.alert('Recording failed', err?.message || 'Please try again.');
+      Alert.alert(
+        t('contacts.import.alerts.recordingFailedTitle'),
+        err?.message || t('contacts.import.alerts.recordingFailedBody'),
+      );
       return;
     }
     if (!fileUri) {
-      Alert.alert('Recording failed', 'No audio was captured. Please try again.');
+      Alert.alert(
+        t('contacts.import.alerts.recordingFailedTitle'),
+        t('contacts.import.alerts.recordingFailedNoAudioBody'),
+      );
       return;
     }
     if (elapsed < MIN_RECORDING_SECONDS) {
       Alert.alert(
-        'Bahut chhota recording',
-        'That recording was too short. Try again — speak naturally for a few seconds.',
+        t('contacts.import.alerts.tooShortTitle'),
+        t('contacts.import.alerts.tooShortBody'),
       );
       return;
     }
@@ -765,8 +788,8 @@ export default function ContactImportScreen() {
       const text = (transcript.text || '').trim();
       if (!text) {
         Alert.alert(
-          "Couldn't hear you clearly",
-          'Try again — speak a bit louder or move somewhere quieter.',
+          t('contacts.import.alerts.couldntHearTitle'),
+          t('contacts.import.alerts.couldntHearBody'),
         );
         return;
       }
@@ -779,8 +802,8 @@ export default function ContactImportScreen() {
       ingestParseResponse(parsed);
     } catch (err: any) {
       Alert.alert(
-        'Could not process recording',
-        err?.message || 'Try again, or use Paste / Photo instead.',
+        t('contacts.import.alerts.couldNotProcessRecordingTitle'),
+        err?.message || t('contacts.import.alerts.couldNotProcessRecordingBody'),
       );
     } finally {
       setLoading(false);
@@ -804,7 +827,7 @@ export default function ContactImportScreen() {
   // book ourselves and render a checklist modal over loadDeviceContacts().
   //
   // openContactsPicker
-  //   1. asks for permission (handled inside loadDeviceContacts)
+  //   1. checks existing permission, requesting only when still needed
   //   2. on grant: stores the device contacts and opens the modal
   //   3. on deny:  Alert with a Settings deep-link
   //   4. on unavailable (dev-client missing native module): Alert with rebuild hint
@@ -817,12 +840,12 @@ export default function ContactImportScreen() {
         setPickerOpen(false);
         if (res.reason === 'denied') {
           Alert.alert(
-            'Permission needed',
-            'MakeMyCall needs permission to read your contacts. Open Settings to enable it.',
+            t('contacts.import.alerts.permissionNeededTitle'),
+            t('contacts.import.alerts.contactsPermissionBody'),
             [
-              { text: 'Cancel', style: 'cancel' },
+              { text: t('contacts.import.alerts.cancel'), style: 'cancel' },
               {
-                text: 'Open Settings',
+                text: t('contacts.import.alerts.openSettings'),
                 onPress: () => {
                   void Linking.openSettings();
                 },
@@ -830,15 +853,15 @@ export default function ContactImportScreen() {
             ],
           );
         } else {
-          Alert.alert('Could not open contacts', res.message);
+          Alert.alert(t('contacts.import.alerts.couldNotOpenContactsTitle'), res.message);
         }
         return;
       }
       if (res.contacts.length === 0) {
         setPickerOpen(false);
         Alert.alert(
-          'Phone book khali hai',
-          'No contacts with phone numbers found on this device.',
+          t('contacts.import.alerts.phoneBookEmptyTitle'),
+          t('contacts.import.alerts.phoneBookEmptyBody'),
         );
         return;
       }
@@ -847,7 +870,10 @@ export default function ContactImportScreen() {
       setPickerSearch('');
     } catch (err: any) {
       setPickerOpen(false);
-      Alert.alert('Contacts import failed', err?.message || 'Try again.');
+      Alert.alert(
+        t('contacts.import.alerts.contactsImportFailedTitle'),
+        err?.message || t('contacts.import.alerts.tryAgainGeneric'),
+      );
     } finally {
       setPickerLoading(false);
     }
@@ -873,7 +899,10 @@ export default function ContactImportScreen() {
   const confirmContactsPicker = async () => {
     const picks = deviceContacts.filter((c) => pickerSelected.has(c.id));
     if (picks.length === 0) {
-      Alert.alert('Pick at least one', 'Tap the contacts you want to import.');
+      Alert.alert(
+        t('contacts.import.alerts.pickAtLeastOneTitle'),
+        t('contacts.import.alerts.pickAtLeastOneBody'),
+      );
       return;
     }
     setPickerOpen(false);
@@ -949,23 +978,28 @@ export default function ContactImportScreen() {
   // defaults filling the gaps — matching the launch flow's default-merge intent.
   const saveContacts = async () => {
     if (rows.length === 0) {
-      Alert.alert('No contacts', 'Add at least one contact before saving.');
+      Alert.alert(
+        t('contacts.import.alerts.noContactsTitle'),
+        t('contacts.import.alerts.noContactsSaveBody'),
+      );
       return;
     }
 
     const validRows = rows.filter((r) => normalisePhone(r.phone).length >= 10);
     if (validRows.length === 0) {
       Alert.alert(
-        'Phone numbers missing',
-        'Each contact needs a 10-digit phone. Tap a row to fix.',
+        t('contacts.import.alerts.phoneNumbersMissingTitle'),
+        t('contacts.import.alerts.phoneNumbersMissingBody'),
       );
       return;
     }
     if (validRows.length < rows.length) {
       const dropped = rows.length - validRows.length;
       const ok = await confirm(
-        `${dropped} row${dropped === 1 ? '' : 's'} skipped`,
-        `${dropped} contact${dropped === 1 ? ' has' : 's have'} no valid phone and will be skipped. Continue?`,
+        t('contacts.import.alerts.rowsSkippedTitle', { count: dropped }),
+        t('contacts.import.alerts.rowsSkippedBody', { count: dropped }),
+        t('contacts.import.alerts.cancel'),
+        t('contacts.import.alerts.continue'),
       );
       if (!ok) return;
     }
@@ -980,7 +1014,7 @@ export default function ContactImportScreen() {
           if (v && String(v).trim()) customFields[k] = v;
         }
         return {
-          name: (r.name || '').trim() || 'Unknown',
+          name: (r.name || '').trim() || t('contacts.import.review.noName'),
           phone: normalisePhone(r.phone),
           customFields,
         };
@@ -998,19 +1032,23 @@ export default function ContactImportScreen() {
       // primitive in this app, and Alert is the established success-confirmation
       // pattern (see /(tabs)/contacts.tsx submitImport, which also Alerts on
       // bulk-import success). Keeps the surface consistent.
-      Alert.alert(
-        '✓ Contacts saved',
-        `${created} contact${created === 1 ? '' : 's'} added` +
-          (skipped ? `, ${skipped} duplicate${skipped === 1 ? '' : 's'} skipped` : ''),
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/(tabs)'),
-          },
-        ],
-      );
+      const savedBody = skipped
+        ? t('contacts.import.alerts.contactsSavedBodyDuplicates', {
+            count: created,
+            skipped,
+          })
+        : t('contacts.import.alerts.contactsSavedBody', { count: created });
+      Alert.alert(t('contacts.import.alerts.contactsSavedTitle'), savedBody, [
+        {
+          text: t('contacts.import.alerts.ok'),
+          onPress: () => router.replace('/(tabs)'),
+        },
+      ]);
     } catch (err: any) {
-      Alert.alert('Could not save contacts', err?.message || 'Please try again.');
+      Alert.alert(
+        t('contacts.import.alerts.couldNotSaveContactsTitle'),
+        err?.message || t('contacts.import.alerts.couldNotSaveContactsBody'),
+      );
     } finally {
       setSaving(false);
     }
@@ -1023,27 +1061,35 @@ export default function ContactImportScreen() {
   // stay; on a network throw we Alert as before.
   const launchCampaign = async () => {
     if (!agentId) {
-      Alert.alert('Missing agent', 'Could not find your assistant. Go back and try again.');
+      Alert.alert(
+        t('contacts.import.alerts.missingAgentTitle'),
+        t('contacts.import.alerts.missingAgentBody'),
+      );
       return;
     }
     if (rows.length === 0) {
-      Alert.alert('No contacts', 'Add at least one contact before calling.');
+      Alert.alert(
+        t('contacts.import.alerts.noContactsTitle'),
+        t('contacts.import.alerts.noContactsCallBody'),
+      );
       return;
     }
 
     const validRows = rows.filter((r) => normalisePhone(r.phone).length >= 10);
     if (validRows.length === 0) {
       Alert.alert(
-        'Phone numbers missing',
-        'Each contact needs a 10-digit phone. Tap a row to fix.',
+        t('contacts.import.alerts.phoneNumbersMissingTitle'),
+        t('contacts.import.alerts.phoneNumbersMissingBody'),
       );
       return;
     }
     if (validRows.length < rows.length) {
       const dropped = rows.length - validRows.length;
       const ok = await confirm(
-        `${dropped} row${dropped === 1 ? '' : 's'} skipped`,
-        `${dropped} contact${dropped === 1 ? ' has' : 's have'} no valid phone and will be skipped. Continue?`,
+        t('contacts.import.alerts.rowsSkippedTitle', { count: dropped }),
+        t('contacts.import.alerts.rowsSkippedBody', { count: dropped }),
+        t('contacts.import.alerts.cancel'),
+        t('contacts.import.alerts.continue'),
       );
       if (!ok) return;
     }
@@ -1052,7 +1098,7 @@ export default function ContactImportScreen() {
     try {
       const raw = await api.post<any>(`/agents/${agentId}/launch`, {
         contacts: validRows.map((r) => ({
-          name: (r.name || '').trim() || 'Unknown',
+          name: (r.name || '').trim() || t('contacts.import.review.noName'),
           phone: normalisePhone(r.phone),
           variables: r.variables || {},
         })),
@@ -1066,9 +1112,15 @@ export default function ContactImportScreen() {
         return;
       }
       // 200 with success=false (insufficient credits, agent not ready, etc.)
-      Alert.alert('Launch failed', env.hint || 'Could not launch the campaign.');
+      Alert.alert(
+        t('contacts.import.alerts.launchFailedTitle'),
+        env.hint || t('contacts.import.alerts.launchFailedBody'),
+      );
     } catch (err: any) {
-      Alert.alert('Could not launch calls', err?.message || 'Please try again.');
+      Alert.alert(
+        t('contacts.import.alerts.couldNotLaunchTitle'),
+        err?.message || t('contacts.import.alerts.couldNotLaunchBody'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -1126,48 +1178,25 @@ export default function ContactImportScreen() {
           hitSlop={12}
           style={styles.backChevron}
         >
-          <Feather name="chevron-left" size={16} color={COLORS.text} />
+          <CaretLeftIcon size={18} color={COLORS.text} weight="regular" />
         </TouchableOpacity>
 
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Add your contacts</Text>
-          <Text style={styles.subtitle}>
-            47 students ke parents ko call karna hai
-          </Text>
+          <Text style={styles.title}>{t('contacts.import.screen.title')}</Text>
+          <Text style={styles.subtitle}>{t('contacts.import.screen.subtitle')}</Text>
         </View>
 
-        {/* Mode tabs */}
-        <View style={styles.tabRow}>
-          <ModeTab
-            active={mode === 'paste'}
-            iconName="clipboard"
-            label="Paste"
-            onPress={() => setMode('paste')}
-            disabled={loading}
-          />
-          <ModeTab
-            active={mode === 'photo'}
-            iconName="camera"
-            label="Photo"
-            onPress={() => setMode('photo')}
-            disabled={loading}
-          />
-          <ModeTab
-            active={mode === 'voice'}
-            iconName="mic"
-            label="Voice"
-            onPress={() => setMode('voice')}
-            disabled={loading || isRecording}
-          />
-          <ModeTab
-            active={mode === 'contacts'}
-            iconName="smartphone"
-            label="Phone"
-            onPress={() => setMode('contacts')}
-            disabled={loading}
-          />
-        </View>
+        {/*
+          The four-mode tab bar that used to live here was removed (Apr 2026).
+          The Contacts tab tile is now the only mode picker — entering this
+          screen with ?mode=<x> goes straight into that mode. Users wanting to
+          try a different method tap back and pick again. The `mode` state
+          still drives which panel renders below, but it never changes after
+          mount. ModeTab and styles.tabRow are intentionally retained as
+          dead code in case we restore the in-screen picker; tree-shaking
+          drops them at build time.
+        */}
 
         {/* Mode panel */}
         <View style={styles.panel}>
@@ -1177,18 +1206,16 @@ export default function ContactImportScreen() {
                 style={styles.textarea}
                 multiline
                 numberOfLines={10}
-                placeholder={PASTE_PLACEHOLDER}
+                placeholder={t('contacts.import.screen.pastePlaceholder')}
                 placeholderTextColor={COLORS.textMuted}
                 value={pasteText}
                 onChangeText={setPasteText}
                 textAlignVertical="top"
                 editable={!loading}
               />
-              <Text style={styles.helper}>
-                Paste your list — handwritten format, WhatsApp se copy, kuch bhi.
-              </Text>
+              <Text style={styles.helper}>{t('contacts.import.screen.pasteHelper')}</Text>
               <PrimaryButton
-                label="Continue → review"
+                label={t('contacts.import.screen.continueReview')}
                 onPress={submitPaste}
                 disabled={loading || pasteText.trim().length < 3}
                 loading={loading}
@@ -1215,24 +1242,22 @@ export default function ContactImportScreen() {
                 </View>
               ) : (
                 <View style={styles.photoSlot}>
-                  <Feather name="camera" size={40} color={COLORS.textSecondary} />
+                  <TatvaIcon name="upload" size={40} color={COLORS.textSecondary} />
                   <Text style={styles.photoSlotText}>
-                    Register ki photo / kheech ke daalo
+                    {t('contacts.import.photo.slotText')}
                   </Text>
                 </View>
               )}
-              <Text style={styles.helper}>
-                Notebook ya register ki photo — hum naam aur number nikal lenge.
-              </Text>
+              <Text style={styles.helper}>{t('contacts.import.photo.helper')}</Text>
               <View style={styles.photoButtons}>
                 <FilledButton
-                  label="Take photo"
+                  label={t('contacts.import.photo.takePhoto')}
                   onPress={() => pickPhoto('camera')}
                   disabled={loading}
                   flex
                 />
                 <OutlinedButton
-                  label="From gallery"
+                  label={t('contacts.import.photo.fromGallery')}
                   onPress={() => pickPhoto('library')}
                   disabled={loading}
                   flex
@@ -1240,7 +1265,7 @@ export default function ContactImportScreen() {
               </View>
               {photoUri && (
                 <PrimaryButton
-                  label="Continue → review"
+                  label={t('contacts.import.screen.continueReview')}
                   onPress={submitPhoto}
                   disabled={loading || !photoBase64}
                   loading={loading}
@@ -1257,7 +1282,11 @@ export default function ContactImportScreen() {
                 disabled={loading}
                 activeOpacity={0.8}
               >
-                <Feather name="mic" size={32} color={COLORS.danger} />
+                <TatvaIcon
+                  name={isRecording ? 'stop' : 'microphone'}
+                  size="3xl"
+                  color={COLORS.danger}
+                />
               </TouchableOpacity>
               {isRecording ? (
                 <View style={styles.voiceTimerRow}>
@@ -1265,15 +1294,17 @@ export default function ContactImportScreen() {
                   <Text style={styles.voiceTimer}>{formatTime(recordingSeconds)}</Text>
                 </View>
               ) : null}
-              <Text style={styles.voiceExample}>
-                "Sharma ji ka number nau-aath-saat-chhe…"
-              </Text>
+              <Text style={styles.voiceExample}>{t('contacts.import.voice.example')}</Text>
               <Text style={styles.voiceHelper}>
                 {loading
-                  ? 'Working…'
+                  ? t('contacts.import.voice.working')
                   : isRecording
-                    ? `Tap to stop · ${MAX_RECORDING_SECONDS - recordingSeconds}s left`
-                    : `Tap to record · max ${MAX_RECORDING_SECONDS}s`}
+                    ? t('contacts.import.voice.tapToStop', {
+                        seconds: MAX_RECORDING_SECONDS - recordingSeconds,
+                      })
+                    : t('contacts.import.voice.tapToRecord', {
+                        seconds: MAX_RECORDING_SECONDS,
+                      })}
               </Text>
             </View>
           )}
@@ -1282,15 +1313,15 @@ export default function ContactImportScreen() {
             <>
               <View style={styles.contactsHero}>
                 <View style={styles.contactsIconCircle}>
-                  <Feather name="users" size={30} color={COLORS.ink} />
+                  <UsersIcon size={30} color={COLORS.ink} weight="regular" />
                 </View>
-                <Text style={styles.contactsTitle}>Phone contacts kholo</Text>
+                <Text style={styles.contactsTitle}>{t('contacts.import.phoneMode.title')}</Text>
                 <Text style={styles.contactsSubtitle}>
-                  Pull from your phone — review on the next screen.
+                  {t('contacts.import.phoneMode.subtitle')}
                 </Text>
               </View>
               <PrimaryButton
-                label="Open phone contacts"
+                label={t('contacts.import.phoneMode.openButton')}
                 onPress={openContactsPicker}
                 disabled={loading || pickerLoading}
                 loading={loading || pickerLoading}
@@ -1303,9 +1334,7 @@ export default function ContactImportScreen() {
         {loading && mode !== 'contacts' && (
           <View style={styles.loadingCard}>
             <ActivityIndicator color={COLORS.ink} />
-            <Text style={styles.loadingText}>
-              List samajh raha hoon… Reading your list…
-            </Text>
+            <Text style={styles.loadingText}>{t('contacts.import.screen.loadingList')}</Text>
           </View>
         )}
       </ScrollView>
@@ -1323,9 +1352,9 @@ export default function ContactImportScreen() {
         <View style={styles.pickerContainer}>
           <View style={styles.pickerHeader}>
             <TouchableOpacity onPress={() => setPickerOpen(false)} hitSlop={10}>
-              <Text style={styles.pickerCancel}>Cancel</Text>
+              <Text style={styles.pickerCancel}>{t('contacts.import.picker.cancel')}</Text>
             </TouchableOpacity>
-            <Text style={styles.pickerTitle}>Pick contacts</Text>
+            <Text style={styles.pickerTitle}>{t('contacts.import.picker.title')}</Text>
             <TouchableOpacity
               onPress={confirmContactsPicker}
               hitSlop={10}
@@ -1337,7 +1366,9 @@ export default function ContactImportScreen() {
                   pickerSelected.size === 0 && styles.pickerDoneDisabled,
                 ]}
               >
-                Done{pickerSelected.size > 0 ? ` (${pickerSelected.size})` : ''}
+                {pickerSelected.size > 0
+                  ? t('contacts.import.picker.doneCount', { count: pickerSelected.size })
+                  : t('contacts.import.picker.done')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1345,14 +1376,16 @@ export default function ContactImportScreen() {
           {pickerLoading ? (
             <View style={styles.pickerCenter}>
               <ActivityIndicator size="large" color={COLORS.ink} />
-              <Text style={styles.pickerLoadingText}>Reading your phone book…</Text>
+              <Text style={styles.pickerLoadingText}>
+                {t('contacts.import.picker.loading')}
+              </Text>
             </View>
           ) : (
             <>
               <View style={styles.pickerSearchRow}>
                 <TextInput
                   style={styles.pickerSearchInput}
-                  placeholder="Search by name or number"
+                  placeholder={t('contacts.import.picker.searchPlaceholder')}
                   placeholderTextColor={COLORS.textMuted}
                   value={pickerSearch}
                   onChangeText={setPickerSearch}
@@ -1361,9 +1394,11 @@ export default function ContactImportScreen() {
 
               {filteredDeviceContacts.length === 0 ? (
                 <View style={styles.pickerCenter}>
-                  <Text style={styles.pickerEmptyTitle}>No matches</Text>
+                  <Text style={styles.pickerEmptyTitle}>
+                    {t('contacts.import.picker.noMatchesTitle')}
+                  </Text>
                   <Text style={styles.pickerEmptyText}>
-                    Try a different search.
+                    {t('contacts.import.picker.noMatchesBody')}
                   </Text>
                 </View>
               ) : (
@@ -1393,7 +1428,7 @@ export default function ContactImportScreen() {
                           ]}
                         >
                           {picked && (
-                            <Feather name="check" size={14} color={COLORS.textOnInk} />
+                            <CheckIcon size={14} color={COLORS.textOnInk} weight="bold" />
                           )}
                         </View>
                       </TouchableOpacity>
@@ -1437,6 +1472,7 @@ function ReviewView(props: {
   onLaunch: () => void;
 }) {
   const router = useRouter();
+  const { t } = useTranslation();
   const {
     rows,
     defaultVars,
@@ -1486,11 +1522,13 @@ function ReviewView(props: {
           hitSlop={12}
           style={styles.backChevron}
         >
-          <Feather name="chevron-left" size={16} color={COLORS.text} />
+          <CaretLeftIcon size={18} color={COLORS.text} weight="regular" />
         </TouchableOpacity>
 
         <View style={styles.header}>
-          <Text style={styles.title}>{total} contacts mile</Text>
+          <Text style={styles.title}>
+            {t('contacts.import.review.foundCount', { count: total })}
+          </Text>
         </View>
 
         {/* Default-variable chip */}
@@ -1498,7 +1536,9 @@ function ReviewView(props: {
           <View style={styles.defaultChipWrap}>
             <View style={styles.defaultChip}>
               <Text style={styles.defaultChipLabel}>
-                Default: {defaultEntries.map(([k, v]) => `${k} = ${v}`).join(', ')} sab par lagega
+                {t('contacts.import.review.defaultPrefix', {
+                  vars: defaultEntries.map(([k, v]) => `${k} = ${v}`).join(', '),
+                })}
               </Text>
             </View>
           </View>
@@ -1507,12 +1547,10 @@ function ReviewView(props: {
         {/* Rows */}
         {rows.length === 0 ? (
           <View style={styles.emptyBlock}>
-            <Text style={styles.emptyTitle}>Kuch nahi mila</Text>
-            <Text style={styles.emptyText}>
-              Try a different mode — paste, photo, or voice.
-            </Text>
+            <Text style={styles.emptyTitle}>{t('contacts.import.review.emptyTitle')}</Text>
+            <Text style={styles.emptyText}>{t('contacts.import.review.emptyBody')}</Text>
             <TouchableOpacity style={styles.outlinedBtn} onPress={onBack}>
-              <Text style={styles.outlinedBtnText}>← Try again</Text>
+              <Text style={styles.outlinedBtnText}>{t('contacts.import.review.tryAgain')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -1534,14 +1572,21 @@ function ReviewView(props: {
         {skipped.length > 0 && (
           <View style={styles.skippedSection}>
             <Text style={styles.skippedSectionLabel}>
-              Inhe samajh nahi paaya — theek karein?
+              {t('contacts.import.review.skippedLabel')}
             </Text>
             {skipped.map((s, i) => (
               <View key={i} style={styles.skippedRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.skippedLine}>{s.line}</Text>
                   {s.reason ? (
-                    <Text style={styles.skippedReason}>{s.reason}</Text>
+                    <Text style={styles.skippedReason}>
+                      {/* Translate well-known reason codes (emitted by the
+                          backend post-filter) into user-friendly copy.
+                          Anything else falls through verbatim. */}
+                      {s.reason === 'ui_text'
+                        ? t('contacts.import.review.skippedReasons.uiText')
+                        : s.reason}
+                    </Text>
                   ) : null}
                 </View>
                 <TouchableOpacity
@@ -1554,7 +1599,7 @@ function ReviewView(props: {
                   }}
                   disabled={submitting}
                 >
-                  <Text style={styles.fixBtnText}>Fix</Text>
+                  <Text style={styles.fixBtnText}>{t('contacts.import.review.fix')}</Text>
                 </TouchableOpacity>
               </View>
             ))}
@@ -1585,14 +1630,15 @@ function ReviewView(props: {
                 <ActivityIndicator color={COLORS.textOnInk} />
               ) : (
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={styles.ctaTextHi}>Save kar lein</Text>
-                  <Text style={styles.ctaTextEn}>Save and finish</Text>
+                  <Text style={styles.ctaTextHi}>{t('contacts.import.cta.saveAndFinish')}</Text>
                 </View>
               )}
             </TouchableOpacity>
             {validCount < total && (
               <Text style={styles.ctaFoot}>
-                {total - validCount} row{total - validCount === 1 ? '' : 's'} without a phone will be skipped.
+                {t('contacts.import.review.rowsSkippedSuffix', {
+                  count: total - validCount,
+                })}
               </Text>
             )}
 
@@ -1613,7 +1659,9 @@ function ReviewView(props: {
                   }}
                 >
                   <Text style={styles.validateRetryText}>
-                    {showRecreate ? 'Re-create' : 'Try again'}
+                    {showRecreate
+                      ? t('contacts.import.review.validateRecreate')
+                      : t('contacts.import.review.validateRetry')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1642,14 +1690,14 @@ function ReviewView(props: {
                   <ActivityIndicator color={COLORS.ink} />
                 ) : validating ? (
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={styles.secondaryCtaTextHi}>Checking…</Text>
-                    <Text style={styles.secondaryCtaTextEn}>Verifying agent</Text>
+                    <Text style={styles.secondaryCtaTextHi}>
+                      {t('contacts.import.cta.checking')}
+                    </Text>
                   </View>
                 ) : (
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={styles.secondaryCtaTextHi}>Abhi call karein</Text>
-                    <Text style={styles.secondaryCtaTextEn}>
-                      Call {validCount} now
+                    <Text style={styles.secondaryCtaTextHi}>
+                      {t('contacts.import.cta.callCount', { count: validCount })}
                     </Text>
                   </View>
                 )}
@@ -1678,62 +1726,72 @@ function ReviewRow({
   onUpdate: (idx: number, patch: Partial<EditableRow>) => void;
   onDelete: (idx: number) => void;
 }) {
-  // Inline edit state: tap a row to expand into name/phone TextInputs. Saves
-  // surface area when the parse is correct, which is the common case.
-  const [expanded, setExpanded] = useState(false);
-  const phoneOk = normalisePhone(row.phone).length >= 10;
-
-  if (!expanded) {
-    return (
-      <TouchableOpacity
-        style={styles.reviewRowCompact}
-        onPress={() => setExpanded(true)}
-        activeOpacity={0.7}
-        disabled={submitting}
-      >
-        <Text style={styles.reviewName} numberOfLines={1}>
-          {row.name?.trim() || 'No name'}
-        </Text>
-        <Text
-          style={[styles.reviewPhone, !phoneOk && styles.reviewPhoneBad]}
-          numberOfLines={1}
-        >
-          {row.phone || '—'}
-        </Text>
-      </TouchableOpacity>
-    );
-  }
+  const { t } = useTranslation();
+  // Always-on inline editing — no expand/collapse. Reasoning:
+  //   1. The previous tap-to-expand pattern hid the phone field whenever
+  //      it was missing, which is the exact moment the user needs to see
+  //      and fill it (OCR can't extract numbers WhatsApp doesn't show
+  //      for saved contacts → empty phone is a common real outcome).
+  //   2. Delete was a tiny "×" only visible after expansion, making a
+  //      destructive action a 2-tap discovery puzzle.
+  //
+  // New shape: name field on top, phone field below, with a clear
+  // trash icon on the right of the row. Empty phone gets a "Needs
+  // number" warning chip so users immediately see which rows need a
+  // hand. Tap the trash to drop the row in one tap.
+  const phoneNormalised = normalisePhone(row.phone);
+  const phoneEmpty = phoneNormalised.length === 0;
+  const phoneIncomplete = !phoneEmpty && phoneNormalised.length < 10;
 
   return (
-    <View style={styles.reviewRowExpanded}>
-      <View style={{ flex: 1, gap: 6 }}>
+    <View style={styles.reviewRow}>
+      <View style={styles.reviewFields}>
         <TextInput
           style={styles.reviewInput}
-          placeholder="Name"
+          placeholder={t('contacts.import.review.namePlaceholder')}
           placeholderTextColor={COLORS.textMuted}
           value={row.name}
           onChangeText={(v) => onUpdate(idx, { name: v })}
           editable={!submitting}
-          onBlur={() => setExpanded(false)}
-          autoFocus
         />
-        <TextInput
-          style={[styles.reviewInput, styles.reviewInputPhone, !phoneOk && styles.reviewInputBad]}
-          placeholder="Phone (10 digits)"
-          placeholderTextColor={COLORS.textMuted}
-          keyboardType="phone-pad"
-          value={row.phone}
-          onChangeText={(v) => onUpdate(idx, { phone: v })}
-          editable={!submitting}
-        />
+        <View
+          style={[
+            styles.phoneFieldWrap,
+            phoneEmpty && styles.phoneFieldWrapEmpty,
+            phoneIncomplete && styles.phoneFieldWrapBad,
+          ]}
+        >
+          <TextInput
+            style={[styles.reviewInput, styles.reviewInputPhone, styles.phoneInputInner]}
+            placeholder={
+              phoneEmpty
+                ? t('contacts.import.review.phoneEmptyPlaceholder')
+                : t('contacts.import.review.phonePlaceholder')
+            }
+            placeholderTextColor={phoneEmpty ? COLORS.warning : COLORS.textMuted}
+            keyboardType="phone-pad"
+            value={row.phone}
+            onChangeText={(v) => onUpdate(idx, { phone: v })}
+            editable={!submitting}
+          />
+          {phoneEmpty ? (
+            <View style={styles.phoneEmptyChip}>
+              <Text style={styles.phoneEmptyChipText}>
+                {t('contacts.import.review.needsNumber')}
+              </Text>
+            </View>
+          ) : null}
+        </View>
       </View>
       <TouchableOpacity
-        style={styles.deleteBtn}
+        style={styles.deleteIconBtn}
         onPress={() => onDelete(idx)}
         disabled={submitting}
         hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel={t('contacts.import.review.deleteA11y')}
       >
-        <Text style={styles.deleteBtnText}>×</Text>
+        <TatvaIcon name="delete" size="md" color={COLORS.textSecondary} />
       </TouchableOpacity>
     </View>
   );
@@ -1741,13 +1799,13 @@ function ReviewRow({
 
 function ModeTab({
   active,
-  iconName,
+  Icon,
   label,
   onPress,
   disabled,
 }: {
   active: boolean;
-  iconName: React.ComponentProps<typeof Feather>['name'];
+  Icon: TatvaIconName;
   label: string;
   onPress: () => void;
   disabled?: boolean;
@@ -1760,7 +1818,7 @@ function ModeTab({
       disabled={disabled}
       activeOpacity={0.7}
     >
-      <Feather name={iconName} size={16} color={fg} />
+      <TatvaIcon name={Icon} size="sm" color={fg} />
       <Text style={[styles.tabLabel, { color: fg }]}>{label}</Text>
     </TouchableOpacity>
   );
@@ -1852,11 +1910,16 @@ function formatTime(secs: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function confirm(title: string, message: string): Promise<boolean> {
+function confirm(
+  title: string,
+  message: string,
+  cancelLabel: string,
+  continueLabel: string,
+): Promise<boolean> {
   return new Promise((resolve) => {
     Alert.alert(title, message, [
-      { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-      { text: 'Continue', onPress: () => resolve(true) },
+      { text: cancelLabel, style: 'cancel', onPress: () => resolve(false) },
+      { text: continueLabel, onPress: () => resolve(true) },
     ]);
   });
 }
@@ -2144,70 +2207,73 @@ const styles = StyleSheet.create({
     color: COLORS.ink,
   },
 
-  // Compact (collapsed) row — name on left, phone on right
-  reviewRowCompact: {
+  // Always-editable row: stacked name + phone fields on the left,
+  // trash icon on the right. No tap-to-expand state.
+  reviewRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: COLORS.statusMuteBg,
-    borderRadius: 8,
-    paddingVertical: 9,
-    paddingHorizontal: 10,
-    marginBottom: 6,
-    gap: 10,
-  },
-  reviewName: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.ink,
-    flexShrink: 1,
-  },
-  reviewPhone: {
-    fontSize: 12,
-    fontFamily: MONOSPACE,
-    color: COLORS.textSecondary,
-    fontVariant: ['tabular-nums'],
-  },
-  reviewPhoneBad: { color: COLORS.danger },
-
-  // Expanded (editing) row
-  reviewRowExpanded: {
-    flexDirection: 'row',
     gap: 10,
     backgroundColor: COLORS.surface,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 0.5,
     borderColor: COLORS.borderSoft,
     padding: 10,
-    marginBottom: 6,
-    alignItems: 'center',
+    marginBottom: 8,
   },
+  reviewFields: { flex: 1, gap: 6 },
   reviewInput: {
     backgroundColor: COLORS.background,
     borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
     color: COLORS.ink,
     borderWidth: 0.5,
     borderColor: 'transparent',
   },
   reviewInputPhone: { fontFamily: MONOSPACE, fontVariant: ['tabular-nums'] },
-  reviewInputBad: { borderColor: COLORS.danger },
-  deleteBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.borderSoft,
+  // Phone field wraps the input + the optional "Needs number" chip so
+  // they share a single bordered surface. Wrap colour shifts with state.
+  phoneFieldWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: 'transparent',
+  },
+  phoneFieldWrapEmpty: {
+    backgroundColor: COLORS.statusExtensionBg,
+    borderColor: COLORS.warning,
+  },
+  phoneFieldWrapBad: { borderColor: COLORS.danger },
+  phoneInputInner: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+  },
+  // Inline warning chip in the phone field when phone is empty.
+  phoneEmptyChip: {
+    backgroundColor: COLORS.warning,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    marginRight: 6,
+  },
+  phoneEmptyChipText: {
+    color: COLORS.textOnInk,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  // Always-visible trash icon — clear destructive affordance.
+  deleteIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.statusMuteBg,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  deleteBtnText: {
-    fontSize: 20,
-    color: COLORS.textSecondary,
-    fontWeight: '500',
-    lineHeight: 22,
-    marginTop: -2,
   },
 
   // Skipped section

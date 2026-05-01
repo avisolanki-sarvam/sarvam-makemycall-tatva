@@ -35,6 +35,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../../src/services/api';
 import { COLORS } from '../../../src/constants/api';
 
@@ -47,6 +48,7 @@ interface TestCallResponse {
 
 export default function TestCallScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { id: agentId } = useLocalSearchParams<{ id: string }>();
 
   const [name, setName] = useState('');
@@ -58,7 +60,7 @@ export default function TestCallScreen() {
 
     const trimmedName = name.trim();
     if (!trimmedName) {
-      Alert.alert('Name needed', 'Please enter who we should call.');
+      Alert.alert(t('agents.testCall.alerts.nameNeededTitle'), t('agents.testCall.alerts.nameNeededBody'));
       return;
     }
 
@@ -73,8 +75,8 @@ export default function TestCallScreen() {
       // Already valid E.164.
     } else {
       Alert.alert(
-        'Phone format',
-        'Enter a 10-digit Indian number (we\'ll add +91), or include the full country code with a +.',
+        t('agents.testCall.alerts.phoneFormatTitle'),
+        t('agents.testCall.alerts.phoneFormatBody'),
       );
       return;
     }
@@ -87,13 +89,13 @@ export default function TestCallScreen() {
       );
 
       Alert.alert(
-        'Calling now',
-        res.message || `Calling ${trimmedName} at ${e164}. Wait for the phone to ring.`,
+        t('agents.testCall.alerts.callingNowTitle'),
+        res.message || t('agents.testCall.alerts.callingNowFallback', { name: trimmedName, phone: e164 }),
         [{ text: 'OK', onPress: () => router.back() }],
       );
     } catch (err: any) {
-      const msg = err?.message || 'Could not place the test call. Try again.';
-      Alert.alert('Test call failed', msg);
+      const msg = err?.message || t('agents.testCall.alerts.testCallFailedFallback');
+      Alert.alert(t('agents.testCall.alerts.testCallFailedTitle'), msg);
     } finally {
       setSubmitting(false);
     }
@@ -105,21 +107,23 @@ export default function TestCallScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Place a test call</Text>
+        <Text style={styles.title}>{t('agents.testCall.title')}</Text>
         <Text style={styles.subtitle}>
-          Your AI assistant will call this number now. Hear how it sounds before you launch a real campaign.
+          {t('agents.testCall.subtitle')}
         </Text>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Name to address</Text>
+          <Text style={styles.label}>{t('agents.testCall.nameLabel')}</Text>
           <Text style={styles.helper}>
-            The agent will call this person by name (used as <Text style={styles.code}>{'{{customer_name}}'}</Text>).
+            {t('agents.testCall.nameHint')}
+            <Text style={styles.code}>{'{{customer_name}}'}</Text>
+            {t('agents.testCall.nameHintEnd')}
           </Text>
           <TextInput
             style={styles.input}
             value={name}
             onChangeText={setName}
-            placeholder="e.g. Avi"
+            placeholder={t('agents.testCall.namePlaceholder')}
             placeholderTextColor={COLORS.textMuted}
             autoCapitalize="words"
             returnKeyType="next"
@@ -128,15 +132,15 @@ export default function TestCallScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Phone number</Text>
+          <Text style={styles.label}>{t('agents.testCall.phoneLabel')}</Text>
           <Text style={styles.helper}>
-            10-digit Indian number (we'll add +91), or include the full country code with a +.
+            {t('agents.testCall.phoneHint')}
           </Text>
           <TextInput
             style={styles.input}
             value={phone}
             onChangeText={setPhone}
-            placeholder="9876543210"
+            placeholder={t('agents.testCall.phonePlaceholder')}
             placeholderTextColor={COLORS.textMuted}
             keyboardType="phone-pad"
             returnKeyType="done"
@@ -153,16 +157,16 @@ export default function TestCallScreen() {
           {submitting ? (
             <ActivityIndicator color={COLORS.textOnInk} />
           ) : (
-            <Text style={styles.callText}>📞 Place test call</Text>
+            <Text style={styles.callText}>{t('agents.testCall.placeCall')}</Text>
           )}
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.cancelBtn} onPress={() => router.back()}>
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{t('common.cancel')}</Text>
         </TouchableOpacity>
 
         <Text style={styles.footnote}>
-          One call per tap. The phone you enter will ring within a few seconds. Charges may apply per your business's call rates.
+          {t('agents.testCall.footnote')}
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>

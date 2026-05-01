@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { COLORS } from '../../../../src/constants/api';
 import { api } from '../../../../src/services/api';
 
@@ -30,6 +31,7 @@ export default function CallDetailScreen() {
   const { callId } = useLocalSearchParams<{ callId: string }>();
   const id = Array.isArray(callId) ? callId[0] : callId;
   const router = useRouter();
+  const { t } = useTranslation();
 
   const [call, setCall] = useState<CallDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,9 +63,9 @@ export default function CallDetailScreen() {
   if (!call) {
     return (
       <View style={[styles.container, styles.center]}>
-        <Text style={styles.errorTxt}>Call not found.</Text>
+        <Text style={styles.errorTxt}>{t('campaigns.call.notFound')}</Text>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.linkTxt}>← Back</Text>
+          <Text style={styles.linkTxt}>← {t('common.back')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -72,35 +74,35 @@ export default function CallDetailScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-        <Text style={styles.backTxt}>← Back</Text>
+        <Text style={styles.backTxt}>← {t('common.back')}</Text>
       </TouchableOpacity>
 
-      <Text style={styles.name}>{call.contactName || 'Unknown'}</Text>
+      <Text style={styles.name}>{call.contactName || t('campaigns.call.unknown')}</Text>
       <Text style={styles.phone}>{call.contactPhone || ''}</Text>
 
       <View style={styles.metaRow}>
-        <Meta label="Status" value={(call.connectivityStatus || '').replace('_', ' ')} />
-        {call.durationSec ? <Meta label="Duration" value={`${call.durationSec}s`} /> : null}
-        <Meta label="Cost" value={`${call.cost} credit${call.cost === 1 ? '' : 's'}`} />
+        <Meta label={t('campaigns.call.status')} value={(call.connectivityStatus || '').replace('_', ' ')} />
+        {call.durationSec ? <Meta label={t('campaigns.call.duration')} value={t('campaigns.detail.secondsSuffix', { seconds: call.durationSec })} /> : null}
+        <Meta label={t('campaigns.call.cost')} value={t('campaigns.call.credits', { count: call.cost })} />
       </View>
 
       {call.outcomeSummary && (
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>What happened</Text>
+          <Text style={styles.summaryLabel}>{t('campaigns.call.whatHappened')}</Text>
           <Text style={styles.summaryQuote}>"{call.outcomeSummary}"</Text>
           {call.outcome && (
-            <Text style={styles.outcomeKey}>Outcome: {call.outcome.replace('_', ' ')}</Text>
+            <Text style={styles.outcomeKey}>{t('campaigns.call.outcome', { outcome: call.outcome.replace('_', ' ') })}</Text>
           )}
         </View>
       )}
 
       {call.transcript && call.transcript.length > 0 && (
         <View style={styles.transcriptCard}>
-          <Text style={styles.summaryLabel}>Transcript</Text>
-          {call.transcript.map((t, i) => (
+          <Text style={styles.summaryLabel}>{t('campaigns.call.transcript')}</Text>
+          {call.transcript.map((entry, i) => (
             <View key={i} style={styles.turn}>
-              <Text style={styles.role}>{t.role === 'agent' ? 'AI' : 'Customer'}</Text>
-              <Text style={styles.text}>{t.text}</Text>
+              <Text style={styles.role}>{entry.role === 'agent' ? t('campaigns.call.speakerAi') : t('campaigns.call.speakerCustomer')}</Text>
+              <Text style={styles.text}>{entry.text}</Text>
             </View>
           ))}
         </View>
@@ -109,7 +111,7 @@ export default function CallDetailScreen() {
       {!call.transcript && call.connectivityStatus !== 'connected' && (
         <View style={styles.transcriptCard}>
           <Text style={styles.dimText}>
-            No transcript — the call didn't connect.
+            {t('campaigns.call.noTranscript')}
           </Text>
         </View>
       )}

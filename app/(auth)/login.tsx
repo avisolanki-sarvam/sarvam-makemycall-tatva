@@ -1,96 +1,89 @@
+/**
+ * /(auth)/login — Indus-style welcome + phone entry.
+ *
+ * Layout, top → bottom (dark surface throughout):
+ *
+ *   1. Hero block — flexible centre. The Sarvam BrandMark renders at a
+ *      generous size with the saffron→indigo gradient. (Photo hero
+ *      placeholder; Avi will swap in the licensed asset later.)
+ *
+ *   2. "Welcome to Sarvam" — display-md in Fraunces (Season substitute).
+ *
+ *   3. Pill phone input — flag emoji + "+91" prefix + 10-digit field +
+ *      circular gradient arrow button on the right (GradientButton).
+ *
+ *   4. Footer row — "Other sign-in options" / "Terms & Services". Dev
+ *      sign-in (gated by __DEV__ + backend ALLOW_DEV_LOGIN) sits below
+ *      as a subtle outline button.
+ *
+ * Behaviour unchanged: hits Twilio Verify via /auth/otp/start, navigates
+ * to /(auth)/verify-otp on success.
+ */
+
 import { useState } from 'react';
 import {
   View,
-  Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
   Alert,
   ScrollView,
+  TouchableOpacity,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import auth from '@react-native-firebase/auth';
-import { useAuthStore } from '../../src/stores/authStore';
-import { COLORS } from '../../src/constants/api';
+import { useTranslation } from 'react-i18next';
+import { ArrowRightIcon } from 'phosphor-react-native';
+import { TatvaColors, Spacing, Weight } from '../../src/constants/theme';
 import { api } from '../../src/services/api';
-
-interface DevLoginResponse {
-  success: boolean;
-  accessToken: string;
-  refreshToken: string;
-  user: {
-    id: string;
-    phone: string;
-    name?: string;
-    businessName?: string;
-    onboardingDone: boolean;
-  };
-}
+import { AppText } from '../../src/components/AppText';
+import { Input } from '../../src/components/Input';
+import { BrandMark } from '../../src/components/BrandMark';
+import { GradientButton } from '../../src/components/GradientButton';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const setPendingVerificationId = useAuthStore((s) => s.setPendingVerificationId);
-  const setAuth = useAuthStore((s) => s.setAuth);
+  const { t } = useTranslation();
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
-  const [devLoading, setDevLoading] = useState(false);
-
-  // Dev-only sign-in: hits the gated /auth/dev-login backend route. No real
-  // OTP flow, no Firebase Phone Auth, no SIM needed. Backend mints a Firebase
-  // ID token via firebase-admin + Firebase REST, then exchanges to our JWT
-  // pair through the same AuthCoordinator path as the real OTP flow — so the
-  // resulting User row is byte-identical to a real signin.
-  //
-  // The button only renders in __DEV__. The backend route is also gated by
-  // ALLOW_DEV_LOGIN=1 + FIREBASE_WEB_API_KEY env vars, so even a leaked
-  // build cannot use this against a hardened production backend.
-  const handleDevLogin = async () => {
-    setDevLoading(true);
-    try {
-      const res = await api.post<DevLoginResponse>('/auth/dev-login', {}, { auth: false });
-      setAuth(res.user, res.accessToken, res.refreshToken);
-      router.replace(res.user.onboardingDone ? '/(tabs)' : '/profile-setup');
-    } catch (err: any) {
-      Alert.alert(
-        'Dev login failed',
-        (err?.message || 'Backend rejected dev-login.') +
-          '\n\nMake sure ALLOW_DEV_LOGIN=1 and FIREBASE_WEB_API_KEY are set on the server.',
-      );
-    } finally {
-      setDevLoading(false);
-    }
-  };
 
   const handleSendOtp = async () => {
     const cleaned = phone.replace(/\D/g, '');
     if (cleaned.length < 10) {
-      Alert.alert('Invalid Number', 'Please enter a valid 10-digit phone number.');
+      Alert.alert(t('auth.login.alerts.invalidNumberTitle'), t('auth.login.alerts.invalidNumberBody'));
       return;
     }
     const e164 = `+91${cleaned}`;
 
     setLoading(true);
     try {
-      // Firebase phone auth — sends real SMS in prod, uses test numbers in dev.
-      const confirmation = await auth().signInWithPhoneNumber(e164);
-      setPendingVerificationId(confirmation.verificationId ?? null);
+      // Twilio Verify — backend wraps verifications.create on /auth/otp/start.
+      // No verificationId needed; verify-otp.tsx posts phone+code straight to
+      // /auth/otp/verify. See api/services/Otp.js + auth/otp-start.js.
+      await api.post<{ success: boolean; status: string }>(
+        '/auth/otp/start',
+        { phone: e164 },
+        { auth: false },
+      );
       router.push(`/(auth)/verify-otp?phone=${cleaned}`);
     } catch (err: any) {
-      const code = err?.code ?? '';
+      const raw = String(err?.message || '');
       const msg =
-        code === 'auth/invalid-phone-number'
-          ? 'That phone number doesn\'t look right.'
-          : code === 'auth/too-many-requests'
-          ? 'Too many attempts. Try again in a few minutes.'
-          : err?.message || 'Failed to send OTP';
-      Alert.alert('Error', msg);
+        /invalid.*phone|E\.164/i.test(raw)
+          ? t('auth.login.alerts.errInvalidPhone')
+          : /too.?many|rate/i.test(raw)
+          ? t('auth.login.alerts.errTooMany')
+          : /60200|not verified|verified caller/i.test(raw)
+          ? 'This number must be verified in Twilio (trial-account limitation). Add it under Phone Numbers → Verified Caller IDs.'
+          : /twilio_misconfigured/i.test(raw)
+          ? 'Server is missing Twilio config. Tell the dev to set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFY_SERVICE_SID.'
+          : raw || t('auth.login.alerts.errSendFailed');
+      Alert.alert(t('auth.login.alerts.errorTitle'), msg);
     } finally {
       setLoading(false);
     }
   };
+
+  const phoneReady = phone.replace(/\D/g, '').length >= 10;
 
   return (
     <KeyboardAvoidingView
@@ -102,158 +95,111 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={styles.logo}>MakeMyCall</Text>
-          <Text style={styles.tagline}>Your AI phone secretary.{'\n'}Enter your number to get started.</Text>
+        {/* ─── Hero ─────────────────────────────────────────────── */}
+        <View style={styles.hero}>
+          <BrandMark size={160} variant="gradient" />
         </View>
 
-        <View style={styles.form}>
-          <Text style={styles.label}>Enter your phone number</Text>
-          <View style={styles.phoneRow}>
-            <View style={styles.countryCode}>
-              <Text style={styles.countryCodeText}>+91</Text>
-            </View>
-            <TextInput
-              style={styles.phoneInput}
-              placeholder="9876543210"
-              placeholderTextColor={COLORS.textMuted}
+        {/* ─── Welcome ───────────────────────────────────────────── */}
+        <View style={styles.welcome}>
+          <AppText variant="display-md" style={styles.welcomeTitle}>
+            Welcome to Sarvam MakeMyCall
+          </AppText>
+        </View>
+
+        {/* ─── Phone pill + arrow button ─────────────────────────── */}
+        <View style={styles.phoneRow}>
+          <View style={styles.phoneInputWrap}>
+            <Input
+              prefix="🇮🇳  +91"
+              placeholder="Mobile number"
               keyboardType="phone-pad"
               maxLength={10}
               value={phone}
               onChangeText={setPhone}
-              autoFocus
+              size="lg"
             />
           </View>
-
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+          <GradientButton
+            size={56}
             onPress={handleSendOtp}
-            disabled={loading}
+            disabled={!phoneReady || loading}
+            accessibilityLabel={t('auth.login.sendOtp')}
           >
-            {loading ? (
-              <ActivityIndicator color={COLORS.textOnInk} />
-            ) : (
-              <Text style={styles.buttonText}>Send OTP</Text>
-            )}
+            <ArrowRightIcon
+              size={20}
+              color={TatvaColors.contentPrimary}
+              weight="bold"
+            />
+          </GradientButton>
+        </View>
+
+        {/* ─── Footer row ────────────────────────────────────────── */}
+        <View style={styles.footerRow}>
+          <TouchableOpacity>
+            <AppText
+              variant="body-sm"
+              tone="tertiary"
+              style={{ fontWeight: Weight.regular }}
+            >
+              Other sign-in options
+            </AppText>
+          </TouchableOpacity>
+          <TouchableOpacity>
+            <AppText
+              variant="body-sm"
+              tone="tertiary"
+              style={{ fontWeight: Weight.regular }}
+            >
+              Terms & Services
+            </AppText>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.disclaimer}>
-          By continuing, you agree to our Terms of Service and Privacy Policy
-        </Text>
-
-        {/* Dev-only — never renders in production builds. */}
-        {__DEV__ ? (
-          <View style={styles.devBlock}>
-            <Text style={styles.devLabel}>Developer</Text>
-            <TouchableOpacity
-              style={[styles.devButton, devLoading && styles.buttonDisabled]}
-              onPress={handleDevLogin}
-              disabled={devLoading}
-              accessibilityLabel="Sign in as a test user (dev only)"
-            >
-              {devLoading ? (
-                <ActivityIndicator color={COLORS.text} />
-              ) : (
-                <Text style={styles.devButtonText}>Sign in as test user</Text>
-              )}
-            </TouchableOpacity>
-            <Text style={styles.devHint}>
-              Bypasses Firebase Phone Auth using a server-side mint.{'\n'}
-              Requires ALLOW_DEV_LOGIN + FIREBASE_WEB_API_KEY on the backend.
-            </Text>
-          </View>
-        ) : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  // contentContainerStyle on ScrollView. flexGrow:1 lets the form center
-  // vertically when content fits, AND lets the dev block scroll into view
-  // when it doesn't (e.g. small screens, keyboard up).
-  content: { flexGrow: 1, justifyContent: 'center', padding: 24 },
-  header: { alignItems: 'center', marginBottom: 40 },
-  logo: { fontSize: 22, fontWeight: '500', color: COLORS.text, letterSpacing: -0.3 },
-  tagline: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 14 * 1.55,
-  },
-  form: { gap: 12 },
-  label: { fontSize: 13, fontWeight: '500', color: COLORS.text, marginBottom: 4 },
-  phoneRow: { flexDirection: 'row', gap: 8 },
-  countryCode: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 8,
-    borderWidth: 0.5,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: 14,
-    justifyContent: 'center',
-  },
-  countryCodeText: { fontSize: 14, fontWeight: '500', color: COLORS.text },
-  phoneInput: {
-    flex: 1,
-    backgroundColor: COLORS.surface,
-    borderRadius: 8,
-    borderWidth: 0.5,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.text,
-    letterSpacing: 1,
-  },
-  button: {
-    backgroundColor: COLORS.ink,
-    borderRadius: 8,
-    paddingVertical: 13,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  buttonDisabled: { opacity: 0.7 },
-  buttonText: { color: COLORS.textOnInk, fontSize: 14, fontWeight: '500' },
-  disclaimer: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginTop: 28,
-    lineHeight: 11 * 1.55,
+  container: { flex: 1, backgroundColor: TatvaColors.surfacePrimary },
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: Spacing['12'],
+    paddingTop: Spacing['24'],
+    paddingBottom: Spacing['16'],
   },
 
-  // ─── Dev-only block ───
-  devBlock: {
-    marginTop: 24,
-    paddingTop: 16,
-    borderTopWidth: 0.5,
-    borderTopColor: COLORS.borderSoft,
-    gap: 8,
-  },
-  devLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: COLORS.textMuted,
-    textAlign: 'center',
-  },
-  devButton: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 0.5,
-    borderColor: COLORS.borderSoft,
-    borderRadius: 8,
-    paddingVertical: 12,
+  // ─── Hero ────────────────────────────────────────────────────
+  hero: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 220,
+    marginBottom: Spacing['16'],
   },
-  devButtonText: { color: COLORS.text, fontSize: 13, fontWeight: '500' },
-  devHint: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    lineHeight: 14,
-    marginTop: 2,
+
+  // ─── Welcome ─────────────────────────────────────────────────
+  welcome: {
+    marginBottom: Spacing['10'],
+  },
+  welcomeTitle: {
+    color: TatvaColors.contentPrimary,
+  },
+
+  // ─── Phone row ───────────────────────────────────────────────
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['5'],
+    marginBottom: Spacing['8'],
+  },
+  phoneInputWrap: { flex: 1 },
+
+  // ─── Footer row ──────────────────────────────────────────────
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing['2'],
   },
 });

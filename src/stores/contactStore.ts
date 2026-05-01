@@ -25,6 +25,9 @@ interface ContactState {
 
   setContacts: (contacts: Contact[]) => void;
   addContact: (contact: Contact) => void;
+  /** Replace the matching contact in-place (id-keyed). Used by the
+   *  contact-edit screen after PUT /contacts/:id resolves. */
+  updateContact: (contact: Contact) => void;
   removeContact: (id: string) => void;
   toggleSelection: (id: string) => void;
   selectAll: () => void;
@@ -43,6 +46,10 @@ export const useContactStore = create<ContactState>((set, get) => ({
 
   setContacts: (contacts) => set({ contacts }),
   addContact: (contact) => set((s) => ({ contacts: [...s.contacts, contact] })),
+  updateContact: (contact) =>
+    set((s) => ({
+      contacts: s.contacts.map((c) => (c.id === contact.id ? contact : c)),
+    })),
   removeContact: (id) => set((s) => ({ contacts: s.contacts.filter((c) => c.id !== id) })),
 
   toggleSelection: (id) =>

@@ -35,6 +35,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import * as Localization from 'expo-localization';
 import en from './locales/en.json';
+import hi from './locales/hi.json';
 
 // Supported language codes. Keep in sync with the JSON files under
 // ./locales/ and the picker in /settings/language. Adding a new code
@@ -63,9 +64,11 @@ export function detectDeviceLanguage(): SupportedLang {
 void i18n.use(initReactI18next).init({
   resources: {
     en: { translation: en },
-    // hi: { translation: hi },   ← drop a locale JSON next to en.json,
-    // ta: { translation: ta },     register here, and that language is
-    // …                            instantly available.
+    hi: { translation: hi },
+    // ta: { translation: ta },   ← drop a locale JSON next to en.json,
+    // te: { translation: te },     register here, and that language is
+    // …                          instantly available. Until then, those
+    //                            codes fall through to fallbackLng ('en').
   },
   lng: detectDeviceLanguage(),
   fallbackLng: 'en',

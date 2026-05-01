@@ -148,6 +148,7 @@ export default function AgentsIndexScreen() {
 
 // ─── Agent row ────────────────────────────────────────────────────────────
 function AgentRow({ item, onPress }: { item: AgentSummary; onPress: () => void }) {
+  const { t } = useTranslation();
   const initials = (item.name || '?').slice(0, 2).toUpperCase();
   const isReady = item.status === 'ready';
   const StatusIco = isReady ? null : item.status === 'creating' ? ArrowsClockwiseIcon : null;
@@ -159,7 +160,7 @@ function AgentRow({ item, onPress }: { item: AgentSummary; onPress: () => void }
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.name} numberOfLines={1}>
-          {item.name || 'Unnamed assistant'}
+          {item.name || t('agents.unnamedAgent')}
         </Text>
         {item.phoneNumber ? (
           <View style={styles.metaRow}>
@@ -174,7 +175,7 @@ function AgentRow({ item, onPress }: { item: AgentSummary; onPress: () => void }
         <View style={[styles.chip, item.status === 'failed' && styles.chipFailed]}>
           {StatusIco ? <StatusIco size={10} color={TatvaColors.warningContent} weight="regular" /> : null}
           <Text style={[styles.chipText, item.status === 'failed' && styles.chipTextFailed]}>
-            {item.status === 'creating' ? 'Setting up' : 'Failed'}
+            {item.status === 'creating' ? t('agents.status.settingUp') : t('agents.status.failed')}
           </Text>
         </View>
       )}

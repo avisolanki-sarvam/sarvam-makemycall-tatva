@@ -1,39 +1,38 @@
 /**
- * /(tabs)/index — Home screen (Tatva fork, restrained edition).
+ * /(tabs)/index — Home dashboard, sectioned (Indus + Avi mockup).
  *
- * Layout, top → bottom:
+ * Layout, top → bottom (dark surface throughout):
  *
- *   1. Top bar         — brand "M" tile + wordmark + wallet pill.
+ *   1. Top bar         — small BrandMark + "sarvam" wordmark + a compact
+ *                        wallet pill that stays as a quick top-up entry.
  *
- *   2. Greeting        — single line ("Namaste, Avi").
+ *   2. Greeting        — eyebrow + display "What should we call today?".
  *
- *   3. Calls today     — single tile, the only "live now" stat. Hidden
- *                        when a non-current month is selected (the user
- *                        is browsing history at that point).
+ *   3. Credits hero    — full-width brand-tinted tile. Balance numeral
+ *                        + "Tap to add funds". Routes to /credits.
  *
- *   4. Month filter    — horizontal pill scroller. Defaults to the
- *                        current month. Drives stat aggregation below.
+ *   4. My Assistants   — section header ("My Assistants  view all >") +
+ *                        "+ Create new" button at the right. Below: a
+ *                        2-up row of the most recent assistant tiles.
+ *                        If only one ready agent exists, the second slot
+ *                        shows a dashed "+ Create new" placeholder so the
+ *                        row doesn't collapse.
  *
- *   5. Connected /     — 2-stat row across all campaigns in the selected
- *      Responded         month. Connected = call picked up. Responded =
- *                        had a real conversation (outcome non-null).
+ *   5. My Calls        — recent multi-contact call runs, shown in the same
+ *                        peek + view-all pattern as assistants.
  *
- *   6. Assistants      — list of assistant cards. Each card has TWO actions:
- *                        "Test call" (instant outbound to the user) and
- *                        "Start campaign". Test call lives next to Start
- *                        campaign so the user can verify the assistant
- *                        before committing to a real batch.
+ *   6. Business        — short business description with edit chevron
+ *      Details          → /settings/edit-profile.
  *
- *   7. FAB             — bottom-right "Create assistant" (positive green).
- *                        Per-card buttons cover the per-assistant launch
- *                        path; the FAB intentionally does NOT start a
- *                        campaign because picking the assistant matters.
+ * Why this composition: the original home dumped every assistant + every
+ * stat onto one screen. With the dashboard layout, each section is a
+ * predictable "peek + view-all" pair — closer to Indus / Wallet / Stripe
+ * dashboards. The user reaches actions in ≤2 taps from any state.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
@@ -44,15 +43,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
   WalletIcon,
-  CaretRightIcon,
   PlusIcon,
-  LightningIcon,
+  CaretRightIcon,
   PhoneCallIcon,
+  PaperPlaneTiltIcon,
+  MegaphoneIcon,
 } from 'phosphor-react-native';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../src/stores/authStore';
 import { api } from '../../src/services/api';
-import { TatvaColors, Radius, Type } from '../../src/constants/theme';
+import { TatvaColors, Radius, Spacing, Shadow, Weight, StatusToTatva, CampaignStatus } from '../../src/constants/theme';
+import { AppText } from '../../src/components/AppText';
+import { BrandMark } from '../../src/components/BrandMark';
+import { TatvaIcon } from '../../src/components/TatvaIcon';
 
 interface DashboardData {
   creditBalance: number;
@@ -82,17 +85,12 @@ interface AgentSummary {
   summaryNL: { whatItDoes?: string };
 }
 
-// Subset of campaign list used for monthly aggregation. Reuses the
-// /campaigns endpoint we already hit on the Campaigns tab — no backend
-// change needed for v1.
 interface CampaignSummary {
   id: string;
+  name?: string | null;
   status: string;
   totalContacts: number;
   completedCount: number;
-  // The backend doesn't yet ship a "responded" aggregate. Until it does
-  // we fall back to completedCount (sufficient signal for this UI).
-  // TODO: swap to respondedCount once /campaigns ships it.
   createdAt: string;
 }
 
@@ -104,7 +102,6 @@ export default function HomeScreen() {
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignSummary[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthKey());
 
   const fetchAll = useCallback(async () => {
     try {
@@ -112,7 +109,7 @@ export default function HomeScreen() {
         api.get<DashboardData>('/user/dashboard'),
         api.get<{ agents: AgentSummary[] }>('/agents').catch(() => ({ agents: [] })),
         api
-          .get<{ campaigns: CampaignSummary[] }>('/campaigns?limit=200')
+          .get<{ campaigns: CampaignSummary[] }>('/campaigns?limit=20')
           .catch(() => ({ campaigns: [] })),
       ]);
       setDashboard(dash);
@@ -133,44 +130,45 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  // Derive the month-pill list from the campaigns we have, anchored on
-  // current month. Always includes the last 6 months so first-time users
-  // see a usable scroller even with zero data.
-  const monthOptions = useMemo(() => buildMonthOptions(campaigns || []), [campaigns]);
-  const selectedIsCurrentMonth = selectedMonth === currentMonthKey();
-
-  // Aggregate Connected / Responded for the selected month.
-  const monthAgg = useMemo(
-    () => aggregateForMonth(campaigns || [], selectedMonth),
-    [campaigns, selectedMonth],
+  // Show only ready agents in the peek row — failed/creating clutter the
+  // surface and the user can't act on them anyway. The full /agents list
+  // shows all states.
+  const readyAgents = useMemo(
+    () => (agents || []).filter((a) => a.status === 'ready'),
+    [agents],
   );
+  const recentAgents = readyAgents.slice(0, 2);
+  const recentCampaigns = (campaigns || []).slice(0, 2);
 
-  const hasResponded = dashboard !== null && agents !== null;
-  const readyAgents = (agents || []).filter((a) => a.status === 'ready');
-  const isEmpty = hasResponded && readyAgents.length === 0;
   const credits = dashboard?.creditBalance ?? 0;
-
-  // "Calls today" rolls up everything across today's window. Without a
-  // dedicated /dashboard/today aggregate, fall back to the most recent
-  // campaign's completed count for now — same approximation we used in
-  // the previous pass.
-  const callsToday = dashboard?.recentCampaign?.completedCount ?? 0;
+  const userFirstName = user?.name?.split(' ')[0] || t('common.namasteFallback');
 
   return (
     <SafeAreaView style={styles.shell} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={TatvaColors.surfaceSecondary} />
+      <StatusBar barStyle="light-content" backgroundColor={TatvaColors.surfacePrimary} />
 
       {/* ─── Top bar ───────────────────────────────────────────── */}
       <View style={styles.topBar}>
         <View style={styles.brandRow}>
-          <View style={styles.brandTile}>
-            <Text style={styles.brandTileText}>M</Text>
-          </View>
-          <Text style={styles.brandWordmark}>{t('common.appName')}</Text>
+          <BrandMark size={28} variant="gradient" />
+          {/* Wordmark says the product name; the Saaras motif on its left
+              is the Sarvam signal. Same logic as the splash. */}
+          <AppText variant="heading-xs" style={{ fontWeight: Weight.bold }}>
+            MakeMyCall
+          </AppText>
         </View>
-        <TouchableOpacity style={styles.walletPill} activeOpacity={0.85}>
-          <WalletIcon size={14} color={TatvaColors.indigoContent} weight="regular" />
-          <Text style={styles.walletPillText}>{credits.toFixed(0)}</Text>
+        <TouchableOpacity
+          style={styles.walletPill}
+          activeOpacity={0.85}
+          onPress={() => router.push('/credits')}
+        >
+          <WalletIcon size={14} color={TatvaColors.brandContent} weight="regular" />
+          <AppText
+            variant="body-sm"
+            style={{ color: TatvaColors.brandContent, fontWeight: Weight.semibold }}
+          >
+            {credits.toLocaleString('en-IN')}
+          </AppText>
         </TouchableOpacity>
       </View>
 
@@ -181,247 +179,310 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={TatvaColors.indigoContent}
+            tintColor={TatvaColors.brandPrimary}
           />
         }
       >
-        {/* ─── Greeting ────────────────────────────────────────── */}
-        <Text style={styles.greeting}>
-          {t('common.namaste', {
-            name: user?.name?.split(' ')[0] || t('common.namasteFallback'),
-          })}
-        </Text>
+        {/* ─── Greeting ─────────────────────────────────────────── */}
+        <AppText variant="body-md" tone="tertiary" style={styles.greetingEyebrow}>
+          Namaste, {userFirstName}
+        </AppText>
+        {/* Headline trimmed from "What should we call today?" → punchier
+            "Who shall we call?", and dropped from display-md (34px) to
+            display-sm (28px) so the credits hero stays above the fold on
+            shorter phones. */}
+        <AppText variant="display-sm" style={styles.greetingTitle}>
+          Who shall we call?
+        </AppText>
 
-        {!isEmpty && (
-          <>
-            {/* ─── Calls today (only when current month is selected) ─ */}
-            {selectedIsCurrentMonth && (
-              <View style={styles.todayCard}>
-                <Text style={styles.todayLabel}>{t('home.callsToday')}</Text>
-                <Text style={styles.todayValue}>{callsToday}</Text>
-              </View>
-            )}
-
-            {/* ─── Month pill scroller ───────────────────────── */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.monthRow}
-            >
-              {monthOptions.map((m) => {
-                const active = m.key === selectedMonth;
-                return (
-                  <TouchableOpacity
-                    key={m.key}
-                    onPress={() => setSelectedMonth(m.key)}
-                    activeOpacity={0.85}
-                    style={[styles.monthPill, active && styles.monthPillActive]}
-                  >
-                    <Text
-                      style={[
-                        styles.monthPillText,
-                        active && styles.monthPillTextActive,
-                      ]}
-                    >
-                      {m.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            {/* ─── Connected / Responded for selected month ─── */}
-            <View style={styles.monthStatCard}>
-              <View style={styles.monthStatHalf}>
-                <Text style={styles.monthStatLabel}>{t('home.connected')}</Text>
-                <Text
-                  style={[styles.monthStatValue, { color: TatvaColors.positiveContent }]}
-                >
-                  {monthAgg.connected}
-                </Text>
-                <Text style={styles.monthStatSub}>
-                  {t('home.customer', { count: monthAgg.connected })}
-                </Text>
-              </View>
-              <View style={styles.monthStatDivider} />
-              <View style={styles.monthStatHalf}>
-                <Text style={styles.monthStatLabel}>{t('home.responded')}</Text>
-                <Text
-                  style={[styles.monthStatValue, { color: TatvaColors.indigoContent }]}
-                >
-                  {monthAgg.responded}
-                </Text>
-                <Text style={styles.monthStatSub}>
-                  {t('home.customer', { count: monthAgg.responded })}
-                </Text>
-              </View>
+        {/* ─── Credits hero ────────────────────────────────────── */}
+        <TouchableOpacity
+          style={styles.creditsHero}
+          activeOpacity={0.85}
+          onPress={() => router.push('/credits')}
+        >
+          <View style={styles.creditsHeroRow}>
+            <View>
+              <AppText
+                variant="label-sm"
+                style={{
+                  color: TatvaColors.brandContent,
+                  opacity: 0.85,
+                  textTransform: 'uppercase',
+                  marginBottom: Spacing['2'],
+                }}
+              >
+                Credits
+              </AppText>
+              <AppText
+                variant="numeral-lg"
+                style={{ color: TatvaColors.contentPrimary }}
+              >
+                {credits.toLocaleString('en-IN')}
+              </AppText>
+              <AppText
+                variant="body-sm"
+                tone="tertiary"
+                style={{ marginTop: Spacing['2'] }}
+              >
+                Tap to add funds
+              </AppText>
             </View>
-          </>
-        )}
-
-        {isEmpty ? (
-          <View style={styles.emptyHero}>
-            <View style={styles.emptyIcon}>
-              <LightningIcon size={20} color={TatvaColors.contentPrimary} weight="regular" />
+            <View style={styles.creditsCta}>
+              <PlusIcon size={18} color={TatvaColors.contentPrimary} weight="bold" />
             </View>
-            <Text style={styles.emptyTitle}>{t('home.emptyTitle')}</Text>
-            <Text style={styles.emptyBody}>{t('home.emptyBody')}</Text>
-            <TouchableOpacity
-              style={styles.emptyCta}
-              onPress={() => router.push('/agents/new')}
-              activeOpacity={0.85}
-            >
-              <PlusIcon size={16} color={TatvaColors.contentInverse} weight="bold" />
-              <Text style={styles.emptyCtaText}>{t('home.emptyCta')}</Text>
-            </TouchableOpacity>
           </View>
-        ) : (
-          <>
-            {/* ─── Agent cards ───────────────────────────────── */}
-            {readyAgents.map((agent, idx) => {
-              const initials = (agent.name || '?').slice(0, 2).toUpperCase();
-              return (
-                <View key={agent.id} style={styles.agentCard}>
-                  <TouchableOpacity
-                    style={styles.agentRow}
-                    activeOpacity={0.7}
-                    onPress={() => router.push(`/agent-preview/${agent.id}`)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open assistant ${agent.name || idx + 1}`}
-                  >
-                    <View style={styles.agentMedallion}>
-                      <Text style={styles.agentMedallionText}>{initials}</Text>
-                    </View>
-                    <View style={styles.agentMeta}>
-                      <Text style={styles.agentName} numberOfLines={1}>
-                        {agent.name || t('home.unnamedAssistant')}
-                      </Text>
-                      {agent.phoneNumber ? (
-                        <Text style={styles.agentPhone}>{agent.phoneNumber}</Text>
-                      ) : null}
-                    </View>
-                    <CaretRightIcon size={16} color={TatvaColors.contentTertiary} weight="regular" />
-                  </TouchableOpacity>
+        </TouchableOpacity>
 
-                  {/* Two side-by-side actions per card. Test call routes
-                      directly to the test-call screen for instant verification;
-                      Start campaign opens the wizard pre-pinned to this agent. */}
-                  <View style={styles.agentActionsRow}>
-                    <TouchableOpacity
-                      style={styles.testCallBtn}
-                      onPress={() => router.push(`/agents/${agent.id}/test-call`)}
-                      activeOpacity={0.85}
-                    >
-                      <PhoneCallIcon
-                        size={14}
-                        color={TatvaColors.contentPrimary}
-                        weight="regular"
-                      />
-                      <Text style={styles.testCallText}>{t('home.testCall')}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.startCampaignBtn}
-                      onPress={() => router.push(`/campaigns/new?agentId=${agent.id}`)}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.startCampaignText}>{t('home.startCampaign')}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })}
-
-            <TouchableOpacity
-              style={styles.addAgentCta}
+        {/* ─── My Assistants ───────────────────────────────────── */}
+        <SectionHeader
+          title="My Assistants"
+          onViewAll={() => router.push('/agents')}
+          onCreate={() => router.push('/agents/new')}
+          createLabel="Create new"
+        />
+        <View style={styles.tileRow}>
+          {recentAgents.map((agent) => (
+            <AgentTile
+              key={agent.id}
+              agent={agent}
+              onOpen={() => router.push(`/agent-preview/${agent.id}`)}
+              onStartCalls={() =>
+                router.push(`/campaigns/new?agentId=${agent.id}`)
+              }
+            />
+          ))}
+          {/* Pad the row with a placeholder so it stays 2-wide. */}
+          {recentAgents.length < 2 ? (
+            <CreatePlaceholderTile
+              label="Create new assistant"
               onPress={() => router.push('/agents/new')}
-              activeOpacity={0.7}
-            >
-              <PlusIcon size={14} color={TatvaColors.contentSecondary} weight="regular" />
-              <Text style={styles.addAgentCtaText}>{t('home.newAgent')}</Text>
-            </TouchableOpacity>
-          </>
-        )}
+            />
+          ) : null}
+        </View>
+
+        {/* ─── My Calls ────────────────────────────────────────── */}
+        <SectionHeader
+          title="My Calls"
+          onViewAll={() => router.push('/(tabs)/history')}
+          onCreate={() =>
+            router.push(
+              recentAgents[0]
+                ? `/campaigns/new?agentId=${recentAgents[0].id}`
+                : '/campaigns/new',
+            )
+          }
+          createLabel="Make My Call"
+        />
+        <View style={styles.tileRow}>
+          {recentCampaigns.map((c) => (
+            <CampaignTile
+              key={c.id}
+              campaign={c}
+              onPress={() => router.push(`/campaigns/${c.id}`)}
+            />
+          ))}
+          {recentCampaigns.length < 2 ? (
+            <CreatePlaceholderTile
+              label="Make My Call"
+              onPress={() =>
+                router.push(
+                  recentAgents[0]
+                    ? `/campaigns/new?agentId=${recentAgents[0].id}`
+                    : '/campaigns/new',
+                )
+              }
+            />
+          ) : null}
+        </View>
+
+        {/* Business Details intentionally lives in Settings → Edit Profile,
+            not on home. The home stays a pure "what can I do today" surface. */}
 
         <View style={{ height: 80 }} />
       </ScrollView>
-
-      {/* ─── FAB ──────────────────────────────────────────────── */}
-      {/* Global "Create assistant" CTA. Each assistant card has its own
-          per-card "Start campaign" button that passes ?agentId=, so we
-          don't need a global Start-campaign FAB — that path was ambiguous
-          in a multi-assistant world (silently picked the first one). The
-          FAB now launches the create-assistant flow, mirroring the
-          tertiary "New assistant" link below the cards but with FAB
-          prominence. */}
-      {!isEmpty && readyAgents.length > 0 && (
-        <TouchableOpacity
-          style={styles.fab}
-          activeOpacity={0.9}
-          onPress={() => router.push('/agents/new')}
-        >
-          <PlusIcon size={18} color={TatvaColors.contentInverse} weight="bold" />
-          <Text style={styles.fabText}>{t('home.createAssistant')}</Text>
-        </TouchableOpacity>
-      )}
     </SafeAreaView>
   );
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────
+// ─── Section header ───────────────────────────────────────────────────────
 
-function currentMonthKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+interface SectionHeaderProps {
+  title: string;
+  onViewAll?: () => void;
+  /** Defaults to "View all". Use "Edit" for the business-details section. */
+  viewLabel?: string;
+  /** When provided, renders a "+ <createLabel>" pill on the right. */
+  onCreate?: () => void;
+  createLabel?: string;
 }
 
-function monthLabel(key: string): string {
-  // key is "YYYY-MM"
-  const [yStr, mStr] = key.split('-');
-  const date = new Date(Number(yStr), Number(mStr) - 1, 1);
-  return date.toLocaleString('en-US', { month: 'short' }) + ' ' + yStr;
+function SectionHeader({
+  title,
+  onViewAll,
+  viewLabel = 'View all',
+  onCreate,
+  createLabel,
+}: SectionHeaderProps) {
+  return (
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionTitleRow}>
+        <AppText variant="heading-sm">{title}</AppText>
+        {onViewAll ? (
+          <TouchableOpacity
+            onPress={onViewAll}
+            hitSlop={8}
+            style={styles.viewAllBtn}
+          >
+            <AppText
+              variant="body-sm"
+              tone="indigo"
+              style={{ fontWeight: Weight.semibold }}
+            >
+              {viewLabel}
+            </AppText>
+            <CaretRightIcon
+              size={14}
+              color={TatvaColors.indigoContent}
+              weight="bold"
+            />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      {onCreate && createLabel ? (
+        <TouchableOpacity
+          onPress={onCreate}
+          activeOpacity={0.85}
+          style={styles.createBtn}
+        >
+          <PlusIcon size={14} color={TatvaColors.contentPrimary} weight="bold" />
+          <AppText
+            variant="body-sm"
+            style={{ fontWeight: Weight.semibold }}
+          >
+            {createLabel}
+          </AppText>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
 }
 
-/**
- * Build the month-pill scroller. Always shows the current month plus the
- * five months before — covers the typical recall horizon and gives a
- * usable scroller even when the user has no campaigns yet.
- */
-function buildMonthOptions(_campaigns: CampaignSummary[]): { key: string; label: string }[] {
-  const out: { key: string; label: string }[] = [];
-  const now = new Date();
-  for (let i = 0; i < 6; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    out.push({ key: k, label: monthLabel(k) });
-  }
-  return out;
+// ─── Agent tile ───────────────────────────────────────────────────────────
+
+interface AgentTileProps {
+  agent: AgentSummary;
+  onOpen: () => void;
+  onStartCalls: () => void;
 }
 
-/**
- * Sum Connected + Responded across all campaigns whose createdAt falls
- * inside the selected month. Until the backend ships dedicated aggregate
- * fields we treat completedCount as the connected proxy and responded as
- * the same value — a follow-up ticket should split these.
- */
-function aggregateForMonth(
-  campaigns: CampaignSummary[],
-  monthKey: string,
-): { connected: number; responded: number } {
-  let connected = 0;
-  let responded = 0;
-  for (const c of campaigns) {
-    const d = new Date(c.createdAt);
-    const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    if (k !== monthKey) continue;
-    connected += c.completedCount ?? 0;
-    // TODO: swap to c.respondedCount once the backend ships it. Until then
-    // we approximate "responded" as ~70% of "connected" — visually distinct
-    // so the UI clearly shows the relationship.
-    responded += Math.round((c.completedCount ?? 0) * 0.7);
-  }
-  return { connected, responded };
+function AgentTile({ agent, onOpen, onStartCalls }: AgentTileProps) {
+  return (
+    <TouchableOpacity
+      style={styles.peekTile}
+      activeOpacity={0.85}
+      onPress={onOpen}
+      accessibilityRole="button"
+      accessibilityLabel={`Open assistant ${agent.name || ''}`}
+    >
+      <View style={styles.tileMedallion}>
+        <TatvaIcon name="audio-book" size="lg" tone="brand" />
+      </View>
+      <AppText variant="heading-xs" numberOfLines={1} style={styles.tileTitle}>
+        {agent.name || 'Unnamed'}
+      </AppText>
+      {agent.phoneNumber ? (
+        <AppText variant="body-xs" tone="tertiary" numberOfLines={1}>
+          {agent.phoneNumber}
+        </AppText>
+      ) : null}
+      <TouchableOpacity
+        style={styles.tileActionBtn}
+        onPress={onStartCalls}
+        activeOpacity={0.85}
+      >
+        <PhoneCallIcon size={12} color={TatvaColors.brandContentInverse} weight="bold" />
+        <AppText
+          variant="body-xs"
+          style={{
+            color: TatvaColors.brandContentInverse,
+            fontWeight: Weight.semibold,
+          }}
+        >
+          Make My Call
+        </AppText>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
 }
+
+// ─── Campaign tile ────────────────────────────────────────────────────────
+
+interface CampaignTileProps {
+  campaign: CampaignSummary;
+  onPress: () => void;
+}
+
+function CampaignTile({ campaign, onPress }: CampaignTileProps) {
+  const status = StatusToTatva[(campaign.status as CampaignStatus) || 'scheduled'];
+  return (
+    <TouchableOpacity
+      style={styles.peekTile}
+      activeOpacity={0.85}
+      onPress={onPress}
+      accessibilityRole="button"
+    >
+      <View style={[styles.tileMedallion, { backgroundColor: TatvaColors.indigoBackground }]}>
+        <MegaphoneIcon
+          size={18}
+          color={TatvaColors.indigoContent}
+          weight="regular"
+        />
+      </View>
+      <AppText variant="heading-xs" numberOfLines={1} style={styles.tileTitle}>
+        {campaign.name || 'Call list'}
+      </AppText>
+      <AppText variant="body-xs" tone="tertiary">
+        {campaign.completedCount ?? 0} / {campaign.totalContacts ?? 0} calls
+      </AppText>
+      <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
+        <AppText
+          variant="label-sm"
+          style={{ color: status.fg, fontSize: 10 }}
+        >
+          {status.label.toUpperCase()}
+        </AppText>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// ─── Create-new placeholder ──────────────────────────────────────────────
+
+function CreatePlaceholderTile({
+  label,
+  onPress,
+}: {
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={[styles.peekTile, styles.peekTileDashed]}
+      activeOpacity={0.7}
+      onPress={onPress}
+    >
+      <View style={[styles.tileMedallion, styles.tileMedallionGhost]}>
+        <PlusIcon size={20} color={TatvaColors.contentTertiary} weight="bold" />
+      </View>
+      <AppText variant="body-sm" tone="secondary" style={{ fontWeight: Weight.medium }}>
+        {label}
+      </AppText>
+    </TouchableOpacity>
+  );
+}
+
+// ─── Styles ──────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   shell: { flex: 1, backgroundColor: TatvaColors.surfacePrimary },
@@ -431,306 +492,141 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
-    backgroundColor: TatvaColors.surfaceSecondary,
-    borderBottomWidth: 1,
-    borderBottomColor: TatvaColors.borderSecondary,
+    paddingHorizontal: Spacing['8'],
+    paddingTop: Spacing['6'],
+    paddingBottom: Spacing['6'],
+    backgroundColor: TatvaColors.surfacePrimary,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: TatvaColors.borderPrimary,
   },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  brandTile: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: TatvaColors.indigoContent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brandTileText: { color: TatvaColors.contentInverse, fontSize: 14, fontWeight: '700' },
-  brandWordmark: { fontSize: 17, fontWeight: '700', color: TatvaColors.contentPrimary },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing['4'] },
   walletPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: TatvaColors.indigoBackground,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: Spacing['3'],
+    backgroundColor: TatvaColors.brandSurface,
+    paddingHorizontal: Spacing['6'],
+    paddingVertical: Spacing['3'],
     borderRadius: Radius.full,
   },
-  walletPillText: { color: TatvaColors.indigoContent, fontSize: 13, fontWeight: '600' },
 
   // ─── Scroll ──────────────────────────────────────────────────
   scroll: { flex: 1 },
-  scrollContent: { padding: 16, paddingBottom: 16 },
+  scrollContent: { padding: Spacing['8'], paddingBottom: Spacing['8'] },
 
   // ─── Greeting ────────────────────────────────────────────────
-  greeting: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: TatvaColors.contentPrimary,
-    marginBottom: 14,
-  },
+  greetingEyebrow: { marginBottom: Spacing['2'] },
+  greetingTitle: { marginBottom: Spacing['10'] },
 
-  // ─── Calls today (single hero stat, current month only) ─────
-  todayCard: {
-    backgroundColor: TatvaColors.surfaceSecondary,
+  // ─── Credits hero ────────────────────────────────────────────
+  creditsHero: {
+    backgroundColor: TatvaColors.brandSurface,
     borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    marginBottom: 14,
+    padding: Spacing['10'],
+    marginBottom: Spacing['12'],
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: TatvaColors.brandPrimary,
   },
-  todayLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: TatvaColors.contentTertiary,
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  todayValue: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: TatvaColors.positiveContent,
-    lineHeight: 40,
-  },
-
-  // ─── Month pills ─────────────────────────────────────────────
-  monthRow: {
+  creditsHeroRow: {
     flexDirection: 'row',
-    gap: 8,
-    paddingVertical: 4,
-    paddingRight: 16,
-    marginBottom: 12,
-  },
-  monthPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: Radius.full,
-    backgroundColor: TatvaColors.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
-  },
-  monthPillActive: {
-    backgroundColor: TatvaColors.indigoContent,
-    borderColor: TatvaColors.indigoContent,
-  },
-  monthPillText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: TatvaColors.contentSecondary,
-  },
-  monthPillTextActive: {
-    color: TatvaColors.contentInverse,
-  },
-
-  // ─── Monthly stats card ──────────────────────────────────────
-  monthStatCard: {
-    flexDirection: 'row',
-    backgroundColor: TatvaColors.surfaceSecondary,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
-    paddingVertical: 18,
-    marginBottom: 18,
-  },
-  monthStatHalf: {
-    flex: 1,
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'space-between',
   },
-  monthStatDivider: {
-    width: 1,
-    backgroundColor: TatvaColors.borderPrimary,
-    marginVertical: 4,
-  },
-  monthStatLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: TatvaColors.contentTertiary,
-    letterSpacing: 0.5,
-  },
-  monthStatValue: {
-    fontSize: 26,
-    fontWeight: '700',
-    lineHeight: 30,
-  },
-  monthStatSub: {
-    fontSize: 11,
-    color: TatvaColors.contentTertiary,
-  },
-
-  // ─── Empty state ─────────────────────────────────────────────
-  emptyHero: {
-    backgroundColor: TatvaColors.surfaceSecondary,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
-    padding: 24,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  emptyIcon: {
+  creditsCta: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
-    backgroundColor: TatvaColors.backgroundSecondary,
-    borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  emptyTitle: {
-    ...Type.headingSm,
-    color: TatvaColors.contentPrimary,
-    fontWeight: '600',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  emptyBody: {
-    fontSize: 13,
-    color: TatvaColors.contentSecondary,
-    textAlign: 'center',
-    marginBottom: 18,
-    lineHeight: 18,
-  },
-  emptyCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    borderRadius: Radius.full,
     backgroundColor: TatvaColors.brandPrimary,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: Radius.md,
-    alignSelf: 'stretch',
+    alignItems: 'center',
     justifyContent: 'center',
-  },
-  emptyCtaText: {
-    color: TatvaColors.contentInverse,
-    fontSize: 14,
-    fontWeight: '600',
   },
 
-  // ─── Agent card ──────────────────────────────────────────────
-  agentCard: {
+  // ─── Section header ──────────────────────────────────────────
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing['5'],
+    gap: Spacing['4'],
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['3'],
+    flex: 1,
+  },
+  viewAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['1'],
+    paddingVertical: Spacing['2'],
+    paddingHorizontal: Spacing['1'],
+  },
+  createBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['3'],
+    paddingHorizontal: Spacing['5'],
+    paddingVertical: Spacing['3'],
+    borderRadius: Radius.full,
+    backgroundColor: TatvaColors.surfaceSecondary,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: TatvaColors.borderSecondary,
+  },
+
+  // ─── Tile row ───────────────────────────────────────────────
+  tileRow: {
+    flexDirection: 'row',
+    gap: Spacing['5'],
+    marginBottom: Spacing['12'],
+  },
+  peekTile: {
+    flex: 1,
     backgroundColor: TatvaColors.surfaceSecondary,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: TatvaColors.borderSecondary,
-    padding: 14,
-    marginBottom: 10,
-    gap: 12,
+    padding: Spacing['8'],
+    minHeight: 160,
+    gap: Spacing['2'],
+    ...Shadow.l1,
   },
-  agentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  agentMedallion: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    backgroundColor: TatvaColors.backgroundSecondary,
-    borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  agentMedallionText: {
-    color: TatvaColors.contentPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  agentMeta: { flex: 1, minWidth: 0 },
-  agentName: {
-    fontSize: 15,
-    color: TatvaColors.contentPrimary,
-    fontWeight: '600',
-  },
-  agentPhone: {
-    fontSize: 13,
-    color: TatvaColors.contentTertiary,
-    marginTop: 2,
-  },
-  agentActionsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  testCallBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: TatvaColors.backgroundSecondary,
-    borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
-    paddingVertical: 9,
-    borderRadius: Radius.md,
-  },
-  testCallText: {
-    color: TatvaColors.contentPrimary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  startCampaignBtn: {
-    flex: 1.4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: TatvaColors.brandPrimary,
-    paddingVertical: 9,
-    borderRadius: Radius.md,
-  },
-  startCampaignText: {
-    color: TatvaColors.contentInverse,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-
-  // ─── Add agent ───────────────────────────────────────────────
-  addAgentCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderWidth: 1,
+  peekTileDashed: {
     borderStyle: 'dashed',
-    borderColor: TatvaColors.borderSecondary,
-    borderRadius: Radius.lg,
-    paddingVertical: 14,
-    marginTop: 4,
+    backgroundColor: 'transparent',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
-  addAgentCtaText: {
-    color: TatvaColors.contentSecondary,
-    fontSize: 13,
-    fontWeight: '500',
+  tileMedallion: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    backgroundColor: TatvaColors.brandSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing['3'],
   },
-
-  // ─── FAB ─────────────────────────────────────────────────────
-  fab: {
-    position: 'absolute',
-    right: 16,
-    bottom: 20,
+  tileMedallionGhost: {
+    backgroundColor: TatvaColors.surfaceTertiary,
+  },
+  tileTitle: {},
+  tileActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: TatvaColors.positiveContent,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
+    justifyContent: 'center',
+    gap: Spacing['2'],
+    backgroundColor: TatvaColors.brandPrimary,
+    paddingVertical: Spacing['3'],
+    paddingHorizontal: Spacing['4'],
     borderRadius: Radius.full,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 4,
+    marginTop: 'auto',
   },
-  fabText: {
-    color: TatvaColors.contentInverse,
-    fontSize: 14,
-    fontWeight: '600',
+  statusPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing['3'],
+    paddingVertical: Spacing['1'],
+    borderRadius: Radius.full,
+    marginTop: 'auto',
   },
+
 });

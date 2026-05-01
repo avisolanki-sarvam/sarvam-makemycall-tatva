@@ -1,109 +1,129 @@
 /**
- * Tatva design tokens, mirrored for React Native.
+ * Tatva design tokens, mirrored for React Native (DARK by default).
  *
- * Source of truth: https://tatva.sarvam.ai (CSS variables resolved from
- * the Storybook canvas in light mode). RN can't consume Tailwind classes
- * or `Box`/`Text` components directly, so we rebuild the same token names
- * here as plain JS values. Keep names in sync with the web tokens; the
- * web/mobile parity check is "pixel for pixel, name for name".
+ * Source of truth: https://tatva.sarvam.ai (Storybook canvas) + the
+ * Tatva MCP component docs. Tatva ships two typefaces (Season — serif,
+ * display + headings; Matter — sans, body + UI) and a paired light/dark
+ * token set switched by a `.dark` class on web. RN can't consume the
+ * Tailwind/CSS-variable mechanism directly, so we reimplement the same
+ * names as JS values.
  *
- * Mental model:
- *   - Surfaces are monochrome white/near-white (cards, panels, page bg).
- *   - Brand is *near-black* (#1a1a1a) — primary CTAs, brand chrome.
- *   - Indigo (#3333cc) is the lone bright accent — used for the brand
- *     mark, active tabs, links, "wallet" pills.
- *   - Positive / warning / danger / orange / pink are the semantic tints
- *     used for status chips and alerts only — never for chrome.
+ * **This app defaults to DARK** to match the Indus aesthetic — that's
+ * the cinematic onboarding flow, the "What's on your mind?" home, and
+ * the chat surfaces. All token getters resolve to dark values; a
+ * future light-mode pass would expose a paired token map and a
+ * `useTheme()` hook reading useColorScheme().
  *
- * Spacing is on a 2px base. So `space(4)` = 8px, `space(8)` = 16px, etc.
- * Use the helper instead of hard-coded numbers in screen styles.
+ * Season is loaded as `Fraunces` (free, near-identical editorial
+ * serif) via `@expo-google-fonts/fraunces`. Matter falls back to the
+ * platform sans-serif (San Francisco / Roboto) — both are excellent
+ * neutral grotesks that pair cleanly with Fraunces.
+ *
+ * Spacing is on a 2px base. So `space(4)` = 8px, `space(8)` = 16px.
  */
 
-// ─── Color tokens ───────────────────────────────────────────────────────────
+import { Platform } from 'react-native';
+
+// ─── Color tokens (DARK) ─────────────────────────────────────────────────
 //
 // Each object groups the related tokens (background + content + border).
 // Component code should pull from THESE — never from raw hex strings.
+//
+// Values come from the Tatva theming docs (`.dark` token table) plus
+// the Indus signature additions (saturated-indigo brand-primary,
+// brand-secondary for the gradient action buttons).
 
 export const TatvaColors = {
   // Surfaces — what cards and the app shell sit on
-  surfacePrimary:   '#fafafa',  // page background (warm-neutral white)
-  surfaceSecondary: '#ffffff',  // cards, sheets, the elevated layer
+  surfacePrimary:   '#0e0e10',  // app shell, page background (true near-black)
+  surfaceSecondary: '#1a1a1d',  // cards, sheets, the elevated layer
+  surfaceTertiary:  '#242428',  // raised tile, input fill, pressed state
 
   // Backgrounds — controls (inputs, popovers) sit on these
-  backgroundPrimary:   '#ffffff',
-  backgroundSecondary: '#f5f5f5',
-  backgroundTertiary:  '#f0f0f0',
+  backgroundPrimary:   '#1a1a1d',
+  backgroundSecondary: '#242428',
+  backgroundTertiary:  '#2e2e34',
 
   // Content (text + icons)
-  contentPrimary:    '#141414',  // headings, primary copy
-  contentSecondary:  '#666666',  // body, descriptions
-  contentTertiary:   '#999999',  // metadata, eyebrows, timestamps
-  contentQuaternary: '#b3b3b3',  // placeholders, disabled
-  contentInverse:    '#ffffff',  // text on dark fills
+  contentPrimary:    '#f5f5f7',  // headings, primary copy
+  contentSecondary:  '#a8a8b3',  // body, descriptions
+  contentTertiary:   '#7a7a85',  // metadata, eyebrows, timestamps
+  contentQuaternary: '#5a5a65',  // placeholders, disabled
+  contentInverse:    '#0e0e10',  // text on light fills (rare in dark mode)
 
-  // Borders
-  borderPrimary:    '#f0f0f0',  // dividers
-  borderSecondary:  '#e6e6e6',  // card outlines
-  borderTertiary:   '#b3b3b3',  // emphasized borders / focus
+  // Borders — these have to read clearly on the dark surfaces.
+  borderPrimary:    '#2a2a30',  // dividers
+  borderSecondary:  '#343438',  // card outlines (default)
+  borderTertiary:   '#5a5a65',  // emphasized borders / focus
 
-  // Brand (Tatva ships a monochrome brand — primary chrome is near-black)
-  brandPrimary:        '#1a1a1a',  // primary CTA fill / brand chrome
-  brandPrimaryHover:   '#000000',
-  brandSurface:        '#f0f0f0',  // soft brand-tinted surface
-  brandContent:        '#1a1a1a',  // text on light brand bg
-  brandContentInverse: '#ffffff',  // text on the dark brand fill
+  // Brand — Tatva's `brand-primary` token. Soft violet-indigo, the
+  // Indus signature. Used for primary CTAs, the action sphere on the
+  // chat input, focus halos, the medallion on the home tile.
+  brandPrimary:        '#818cf8',  // dark-mode brand-primary (Tatva spec)
+  brandPrimaryHover:   '#a5b4fc',
+  brandSurface:        '#1f1d3a',  // soft brand-tinted surface
+  brandContent:        '#c7d2fe',  // brand text on a dark surface
+  brandContentInverse: '#0e0e10',  // on a brand-primary fill
 
-  // Accent — Indigo. Used for the app logo mark, active tab tint, links,
-  // and "wallet credit" style pills. Sparingly!
-  indigoBackground: '#e8effc',
-  indigoContent:    '#3333cc',
-  indigoBorder:     '#3333cc',
+  // Indigo accent — the saturated link / focus indigo.
+  // Distinct from brand-primary: this is the "link blue" of Indus.
+  indigoBackground: '#1a1f3a',  // soft tint
+  indigoContent:    '#a5b4fc',  // on dark surface
+  indigoBorder:     '#6366f1',
+  indigoSurface:    '#6366f1',  // saturated tile
+  indigoSurfaceHover: '#818cf8',
 
-  // Semantic states
-  positiveBackground: '#f2f8eb',
-  positiveContent:    '#385418',
-  positiveBorder:     '#6ea335',
+  // Saffron / sunrise — Indus's brand mark gradient top half.
+  saffronStart: '#f4a25b',
+  saffronEnd:   '#e07a3c',
 
-  warningBackground: '#fff8e6',
-  warningContent:    '#a27224',
-  warningBorder:     '#c08827',
+  // Semantic states (dark-tuned)
+  positiveBackground: '#0f2d18',
+  positiveContent:    '#86efac',
+  positiveBorder:     '#16a34a',
 
-  dangerBackground: '#fde7e2',
-  dangerContent:    '#b81514',
-  dangerBorder:     '#b81514',
+  warningBackground: '#2d2410',
+  warningContent:    '#fcd34d',
+  warningBorder:     '#d97706',
 
-  // Extra accents (use only for chart series / category chips)
-  orangeBackground: '#feede6',
-  orangeContent:    '#e6651b',
-  greenBackground:  '#f2f8eb',
-  greenContent:     '#385418',
-  yellowBackground: '#fff8e6',
-  yellowContent:    '#c08827',
-  pinkBackground:   '#fceaf0',
-  pinkContent:      '#9d2055',
-  redBackground:    '#fde7e2',
-  redContent:       '#b81514',
+  dangerBackground: '#2d1014',
+  dangerContent:    '#fca5a5',
+  dangerBorder:     '#ef4444',
+
+  // Extra accents (chart / category chips)
+  orangeBackground: '#2d1f10',
+  orangeContent:    '#fb923c',
+  greenBackground:  '#0f2d18',
+  greenContent:     '#86efac',
+  yellowBackground: '#2d2410',
+  yellowContent:    '#fcd34d',
+  pinkBackground:   '#2d1024',
+  pinkContent:      '#f9a8d4',
+  redBackground:    '#2d1014',
+  redContent:       '#fca5a5',
 } as const;
 
 // ─── Spacing scale ──────────────────────────────────────────────────────────
 //
-// Base unit is 2px. Token `n` resolves to `n × 2` px. So:
+// Base unit is 2px. Token `n` resolves to `n × 2` px.
 //   space(2) = 4px   — icon-to-text gap, badge inner padding
 //   space(4) = 8px   — button padding, chip gap
-//   space(6) = 12px  — input padding, compact card padding
+//   space(6) = 12px  — input padding (compact)
 //   space(8) = 16px  — default card padding
 //   space(12)= 24px  — section padding
 //   space(16)= 32px  — page section padding
 export const space = (n: number) => n * 2;
 
-// Alias common steps so consuming code reads naturally.
 export const Spacing = {
+  '1':  space(1),
   '2':  space(2),
   '3':  space(3),
   '4':  space(4),
   '5':  space(5),
   '6':  space(6),
+  '7':  space(7),
   '8':  space(8),
+  '9':  space(9),
   '10': space(10),
   '12': space(12),
   '14': space(14),
@@ -116,10 +136,10 @@ export const Spacing = {
 //
 // Surface guidance:
 //   sm   — tags, table cells (8)
-//   md   — buttons, inputs, badges (12)
+//   md   — buttons, inputs in dense forms (12)
 //   lg   — cards, panels, dropdowns (20)
-//   xl   — modals, drawers (24)
-//   full — pills, avatars (9999)
+//   xl   — modals, drawers, hero tiles (24)
+//   full — pills (Indus default for inputs + suggestion chips)
 export const Radius = {
   sm:   8,
   md:   12,
@@ -128,56 +148,99 @@ export const Radius = {
   full: 9999,
 } as const;
 
+// ─── Font weights ───────────────────────────────────────────────────────────
+//
+// Tatva's label-md uses regular weight (`font-[400]`). Headings 500.
+// Display uses 500 (Season is high-contrast enough that 500 reads as
+// "display"). Centralise these so we don't drift.
+export const Weight = {
+  regular:  '400' as const,
+  medium:   '500' as const,
+  semibold: '600' as const,
+  bold:     '700' as const,
+};
+
+// ─── Font families ──────────────────────────────────────────────────────────
+//
+// `Fonts.serif` is loaded via @expo-google-fonts/fraunces; the names below
+// MUST exactly match the keys passed to useFonts() in app/_layout.tsx.
+// `Fonts.sans` falls back to the platform default — which is perfect for
+// Matter's role on a phone.
+//
+// Per Tatva's Typography docs:
+//   - display-* and heading-* (except heading-sm) use Season
+//   - heading-sm + body-* + label-* use Matter (sans)
+
+export const Fonts = {
+  serifRegular: 'Fraunces_400Regular',
+  serifMedium:  'Fraunces_500Medium',
+  // Matter substitute = platform sans. RN resolves `undefined` to the
+  // system stack — that's what we want.
+  sansRegular:  Platform.select({ ios: undefined, android: 'sans-serif' }),
+  sansMedium:   Platform.select({ ios: undefined, android: 'sans-serif-medium' }),
+} as const;
+
 // ─── Typography ─────────────────────────────────────────────────────────────
 //
-// Tatva ships Season (serif, display + headings) and Matter (sans, body
-// + UI). On Android we fall back to the system stack — the app loads
-// SpaceGrotesk via expo-font, so we use that for headings and the OS
-// sans-serif for body. Names mirror Tatva's `Text` `variant` prop so
-// agent prompts reading the spec recognise them.
+// `letterSpacing` matches Tatva's `tracking-tight` for display + heading.
+// label-md uses regular weight per the Tatva docs (do not bump to medium).
+//
+// The display + heading-{lg,md,xs} variants use the serif. heading-sm,
+// body-*, label-* stay sans — exact match to Tatva's typeface table.
 export const Type = {
-  // display
-  displaySm:   { fontSize: 32, lineHeight: 38, fontWeight: '500' as const },
+  // display — hero titles (splash, "Welcome to Sarvam", "What's on your mind?")
+  displayLg:   { fontFamily: Fonts.serifMedium,  fontSize: 40, lineHeight: 46, fontWeight: Weight.medium, letterSpacing: -0.6 },
+  displayMd:   { fontFamily: Fonts.serifMedium,  fontSize: 34, lineHeight: 40, fontWeight: Weight.medium, letterSpacing: -0.5 },
+  displaySm:   { fontFamily: Fonts.serifMedium,  fontSize: 28, lineHeight: 34, fontWeight: Weight.medium, letterSpacing: -0.4 },
 
-  // heading
-  headingLg:   { fontSize: 24, lineHeight: 30, fontWeight: '500' as const },
-  headingMd:   { fontSize: 20, lineHeight: 26, fontWeight: '500' as const },
-  headingSm:   { fontSize: 18, lineHeight: 24, fontWeight: '500' as const },
-  headingXs:   { fontSize: 16, lineHeight: 22, fontWeight: '500' as const },
+  // heading — Season except heading-sm (Tatva spec)
+  headingLg:   { fontFamily: Fonts.serifMedium,  fontSize: 24, lineHeight: 30, fontWeight: Weight.medium, letterSpacing: -0.3 },
+  headingMd:   { fontFamily: Fonts.serifMedium,  fontSize: 20, lineHeight: 26, fontWeight: Weight.medium, letterSpacing: -0.2 },
+  headingSm:   { fontFamily: Fonts.sansMedium,   fontSize: 18, lineHeight: 24, fontWeight: Weight.medium },
+  headingXs:   { fontFamily: Fonts.serifMedium,  fontSize: 16, lineHeight: 22, fontWeight: Weight.medium },
 
-  // body
-  bodyXl:      { fontSize: 24, lineHeight: 32, fontWeight: '400' as const },
-  bodyLg:      { fontSize: 18, lineHeight: 26, fontWeight: '400' as const },
-  bodyMd:      { fontSize: 16, lineHeight: 22, fontWeight: '400' as const },
-  bodySm:      { fontSize: 15, lineHeight: 20, fontWeight: '400' as const },
-  bodyXs:      { fontSize: 12, lineHeight: 16, fontWeight: '400' as const },
+  // body — Matter (sans) throughout
+  bodyXl:      { fontFamily: Fonts.sansRegular,  fontSize: 24, lineHeight: 32, fontWeight: Weight.regular },
+  bodyLg:      { fontFamily: Fonts.sansRegular,  fontSize: 18, lineHeight: 26, fontWeight: Weight.regular },
+  bodyMd:      { fontFamily: Fonts.sansRegular,  fontSize: 16, lineHeight: 22, fontWeight: Weight.regular },
+  bodySm:      { fontFamily: Fonts.sansRegular,  fontSize: 14, lineHeight: 20, fontWeight: Weight.regular },
+  bodyXs:      { fontFamily: Fonts.sansRegular,  fontSize: 12, lineHeight: 16, fontWeight: Weight.regular },
 
-  // labels (uppercase eyebrows, form labels, tag text)
-  labelMd:     { fontSize: 15, lineHeight: 20, fontWeight: '500' as const },
-  labelSm:     { fontSize: 12, lineHeight: 16, fontWeight: '500' as const, letterSpacing: 0.5 },
+  // labels — Matter, label-md REGULAR per Tatva spec
+  labelMd:     { fontFamily: Fonts.sansRegular,  fontSize: 14, lineHeight: 20, fontWeight: Weight.regular },
+  labelSm:     { fontFamily: Fonts.sansMedium,   fontSize: 12, lineHeight: 16, fontWeight: Weight.medium, letterSpacing: 0.3 },
+
+  // numerals — Season for the splash KPI moments
+  numeralLg:   { fontFamily: Fonts.serifMedium,  fontSize: 36, lineHeight: 40, fontWeight: Weight.semibold, letterSpacing: -0.5 },
+  numeralMd:   { fontFamily: Fonts.serifMedium,  fontSize: 26, lineHeight: 30, fontWeight: Weight.semibold, letterSpacing: -0.3 },
 } as const;
 
 // ─── Elevation ──────────────────────────────────────────────────────────────
 //
-// Tatva ships only two shadow tokens. Mirror them as RN style fragments —
-// note Android uses `elevation`; iOS uses the shadow* set.
+// Shadows on dark surfaces are mostly imperceptible — Indus relies on
+// border + tonal contrast instead. We keep l1/l2 as no-op-friendly
+// objects so calling code doesn't have to special-case dark.
 export const Shadow = {
-  // l1 — subtle, for dropdowns, tooltips, floating cards
-  l1: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  // l2 — strong, for modals, dialogs
-  l2: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-  },
+  l1: Platform.select({
+    ios: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.4,
+      shadowRadius: 3,
+    },
+    android: { elevation: 2 },
+    default: {},
+  }) as object,
+  l2: Platform.select({
+    ios: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.5,
+      shadowRadius: 24,
+    },
+    android: { elevation: 8 },
+    default: {},
+  }) as object,
 } as const;
 
 // ─── Status helpers ─────────────────────────────────────────────────────────
@@ -207,13 +270,8 @@ export const StatusToTatva: Record<
 // ─── Backwards-compatibility shim ───────────────────────────────────────────
 //
 // Keeps the prior `COLORS` import working for any screens we haven't
-// migrated yet. Old names point to the closest Tatva equivalent so the
-// editorial cream/ink palette is replaced cleanly without a thousand
-// edit calls. Note: this object is intentionally NOT `as const` — code
-// like `let dot = COLORS.textMuted` then `dot = COLORS.danger` would
-// fail to compile under literal types, since each key would resolve to
-// its specific hex string. Keeping it as a wide `Record`-like shape
-// preserves the prior assignment ergonomics.
+// migrated yet. With dark-mode tokens above, any unmigrated screen
+// flips to dark automatically — that's intentional.
 export const COLORS: Record<string, string> = {
   background:        TatvaColors.surfacePrimary,
   surface:           TatvaColors.surfaceSecondary,
@@ -221,7 +279,7 @@ export const COLORS: Record<string, string> = {
   paper:             TatvaColors.surfaceSecondary,
 
   ink:               TatvaColors.brandPrimary,
-  inkSoft:           '#2a2a2a',
+  inkSoft:           TatvaColors.brandPrimaryHover,
   primary:           TatvaColors.brandPrimary,
   primaryDark:       TatvaColors.brandPrimaryHover,
   primaryLight:      TatvaColors.indigoBackground,

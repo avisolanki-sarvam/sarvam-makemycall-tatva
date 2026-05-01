@@ -32,6 +32,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../src/services/api';
 import { COLORS } from '../../src/constants/api';
 import { useContactStore } from '../../src/stores/contactStore';
@@ -73,6 +74,7 @@ type EditableRow = {
 
 export default function PasteNotesScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   // Note: contact-store refresh after bulk happens via
   // `useContactStore.getState().setContacts(...)` directly in the submit
   // handler below — no hook subscription needed here. (The previous version
@@ -119,8 +121,8 @@ export default function PasteNotesScreen() {
       setDetectedIntent(res.detectedIntent || null);
     } catch (err: any) {
       Alert.alert(
-        'Could not parse',
-        err?.message || 'The server rejected the parse request. Try splitting the text into smaller chunks.',
+        t('contacts.pasteNotes.alerts.couldNotParseTitle'),
+        err?.message || t('contacts.pasteNotes.alerts.couldNotParseBody'),
       );
     } finally {
       setParsing(false);
@@ -135,8 +137,8 @@ export default function PasteNotesScreen() {
     const malformed = toAdd.filter((r) => !r.phone || r.phone.replace(/\D/g, '').length < 10);
     if (malformed.length > 0) {
       Alert.alert(
-        'Some rows need a phone',
-        `${malformed.length} row(s) don't have a valid 10-digit phone. Either fix them, untick them, or add the phones manually before continuing.`,
+        t('contacts.pasteNotes.alerts.needPhoneTitle'),
+        t('contacts.pasteNotes.alerts.needPhoneBody', { count: malformed.length }),
       );
       return;
     }
@@ -159,14 +161,16 @@ export default function PasteNotesScreen() {
         useContactStore.getState().setContacts(refreshed.contacts || []);
       } catch (_) { /* non-fatal */ }
 
+      const body = res.skippedCount > 0
+        ? t('contacts.pasteNotes.alerts.addedBodySkipped', { count: res.createdCount, skipped: res.skippedCount })
+        : t('contacts.pasteNotes.alerts.addedBody', { count: res.createdCount });
       Alert.alert(
-        'Contacts added',
-        `${res.createdCount} new ${res.createdCount === 1 ? 'contact' : 'contacts'}.` +
-          (res.skippedCount > 0 ? `\n${res.skippedCount} skipped (already exist).` : ''),
+        t('contacts.pasteNotes.alerts.addedTitle'),
+        body,
         [{ text: 'OK', onPress: () => router.back() }],
       );
     } catch (err: any) {
-      Alert.alert('Failed to add contacts', err?.message || 'Please try again.');
+      Alert.alert(t('contacts.pasteNotes.alerts.addFailedTitle'), err?.message || t('contacts.pasteNotes.alerts.addFailedBody'));
     } finally {
       setSubmitting(false);
     }
@@ -189,25 +193,20 @@ export default function PasteNotesScreen() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Text style={styles.back}>← Back</Text>
+            <Text style={styles.back}>← {t('common.back')}</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Paste your notes</Text>
+          <Text style={styles.title}>{t('contacts.pasteNotes.title')}</Text>
           <Text style={styles.subtitle}>
-            Paste customer names, phone numbers, and what each call should be about. We'll
-            structure them — review before adding.
+            {t('contacts.pasteNotes.subtitle')}
           </Text>
         </View>
 
         {/* Input */}
-        <Text style={styles.sectionLabel}>Your notes</Text>
+        <Text style={styles.sectionLabel}>{t('contacts.pasteNotes.yourNotes')}</Text>
         <TextInput
           style={styles.textarea}
           multiline
-          placeholder={
-            'Ramesh 9876543210 — pending payment 200\n' +
-            'Sita 9988776655 - asked for monthly plan\n' +
-            'baaki sab se 100'
-          }
+          placeholder={t('contacts.pasteNotes.placeholder')}
           placeholderTextColor={COLORS.textMuted}
           value={text}
           onChangeText={setText}
@@ -216,7 +215,7 @@ export default function PasteNotesScreen() {
         />
 
         {/* Language pills */}
-        <Text style={styles.sectionLabelTight}>Notes in</Text>
+        <Text style={styles.sectionLabelTight}>{t('contacts.pasteNotes.notesIn')}</Text>
         <View style={styles.langRow}>
           {(['hinglish', 'hi', 'en'] as const).map((lang) => (
             <TouchableOpacity
@@ -226,7 +225,7 @@ export default function PasteNotesScreen() {
               disabled={parsing || submitting}
             >
               <Text style={[styles.langPillText, language === lang && styles.langPillTextActive]}>
-                {lang === 'hinglish' ? 'Hinglish' : lang === 'hi' ? 'हिंदी' : 'English'}
+                {lang === 'hinglish' ? t('contacts.pasteNotes.langHinglish') : lang === 'hi' ? t('contacts.pasteNotes.langHindi') : t('contacts.pasteNotes.langEnglish')}
               </Text>
             </TouchableOpacity>
           ))}
@@ -241,28 +240,24 @@ export default function PasteNotesScreen() {
           {parsing ? (
             <ActivityIndicator color={COLORS.textOnInk} />
           ) : (
-            <Text style={styles.ctaText}>{rows.length > 0 ? 'Re-parse' : 'Parse'}</Text>
+            <Text style={styles.ctaText}>{rows.length > 0 ? t('contacts.pasteNotes.reparse') : t('contacts.pasteNotes.parse')}</Text>
           )}
         </TouchableOpacity>
 
         {/* Detected intent + default vars summary */}
         {detectedIntent ? (
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>What we read</Text>
+            <Text style={styles.summaryLabel}>{t('contacts.pasteNotes.whatWeRead')}</Text>
             <Text style={styles.summaryRow}>
-              Intent: <Text style={styles.summaryStrong}>{intentLabel(detectedIntent)}</Text>
+              {t('contacts.pasteNotes.intentLine', { intent: t(intentKey(detectedIntent)) })}
             </Text>
             {Object.keys(defaultVars).length > 0 ? (
               <Text style={styles.summaryRow}>
-                Applied to all:{' '}
-                <Text style={styles.summaryStrong}>
-                  {Object.entries(defaultVars).map(([k, v]) => `${k} = ${v}`).join(', ')}
-                </Text>
+                {t('contacts.pasteNotes.appliedToAll', { vars: Object.entries(defaultVars).map(([k, v]) => `${k} = ${v}`).join(', ') })}
               </Text>
             ) : null}
             <Text style={styles.summaryRow}>
-              Found <Text style={styles.summaryStrong}>{rows.length}</Text> contact{rows.length === 1 ? '' : 's'},
-              skipped <Text style={styles.summaryStrong}>{skipped.length}</Text> line{skipped.length === 1 ? '' : 's'}.
+              {t('contacts.pasteNotes.foundLine', { count: rows.length, skipped: skipped.length })}
             </Text>
           </View>
         ) : null}
@@ -271,8 +266,8 @@ export default function PasteNotesScreen() {
         {rows.length > 0 ? (
           <View style={{ marginTop: 4 }}>
             <View style={styles.rowsHeader}>
-              <Text style={styles.sectionLabel}>Review &amp; edit</Text>
-              <Text style={styles.rowsCount}>{selectedCount} selected</Text>
+              <Text style={styles.sectionLabel}>{t('contacts.pasteNotes.reviewEdit')}</Text>
+              <Text style={styles.rowsCount}>{t('contacts.pasteNotes.selectedSuffix', { count: selectedCount })}</Text>
             </View>
             {rows.map((r, idx) => (
               <View key={idx} style={[styles.row, !r.selected && styles.rowDim]}>
@@ -286,7 +281,7 @@ export default function PasteNotesScreen() {
                 <View style={styles.rowFields}>
                   <TextInput
                     style={styles.rowInput}
-                    placeholder="Name"
+                    placeholder={t('contacts.pasteNotes.namePlaceholder')}
                     placeholderTextColor={COLORS.textMuted}
                     value={r.name}
                     onChangeText={(v) => updateRow(idx, { name: v })}
@@ -294,7 +289,7 @@ export default function PasteNotesScreen() {
                   />
                   <TextInput
                     style={styles.rowInput}
-                    placeholder="Phone (10 digits)"
+                    placeholder={t('contacts.pasteNotes.phonePlaceholder')}
                     placeholderTextColor={COLORS.textMuted}
                     keyboardType="phone-pad"
                     value={r.phone}
@@ -303,7 +298,7 @@ export default function PasteNotesScreen() {
                   />
                   <TextInput
                     style={[styles.rowInput, styles.rowInputTask]}
-                    placeholder="What's this call about?"
+                    placeholder={t('contacts.pasteNotes.aboutPlaceholder')}
                     placeholderTextColor={COLORS.textMuted}
                     value={r.task}
                     onChangeText={(v) => updateRow(idx, { task: v })}
@@ -319,7 +314,7 @@ export default function PasteNotesScreen() {
         {skipped.length > 0 ? (
           <View style={styles.skippedCard}>
             <Text style={styles.skippedLabel}>
-              Couldn't parse {skipped.length} line{skipped.length === 1 ? '' : 's'}
+              {t('contacts.pasteNotes.couldntParse', { count: skipped.length })}
             </Text>
             {skipped.map((s, i) => (
               <Text key={i} style={styles.skippedLine}>
@@ -327,7 +322,7 @@ export default function PasteNotesScreen() {
               </Text>
             ))}
             <Text style={styles.skippedHint}>
-              Tip: edit your notes above and tap Re-parse, or add these contacts manually later.
+              {t('contacts.pasteNotes.tip')}
             </Text>
           </View>
         ) : null}
@@ -343,7 +338,7 @@ export default function PasteNotesScreen() {
               <ActivityIndicator color={COLORS.textOnInk} />
             ) : (
               <Text style={styles.ctaText}>
-                Add {selectedCount} {selectedCount === 1 ? 'contact' : 'contacts'}
+                {t('contacts.pasteNotes.addCount', { count: selectedCount })}
               </Text>
             )}
           </TouchableOpacity>
@@ -366,13 +361,13 @@ function variableSummary(
   return entries.map(([k, v]) => `${k}: ${v}`).join(', ');
 }
 
-function intentLabel(intent: string): string {
+function intentKey(intent: string): string {
   switch (intent) {
-    case 'collections': return 'Pending payments';
-    case 'sales':       return 'Sales / outreach';
-    case 'reminder':    return 'Reminder calls';
-    case 'survey':      return 'Feedback / survey';
-    default:            return 'General outreach';
+    case 'collections': return 'contacts.pasteNotes.intent.pendingPayments';
+    case 'sales':       return 'contacts.pasteNotes.intent.salesOutreach';
+    case 'reminder':    return 'contacts.pasteNotes.intent.reminderCalls';
+    case 'survey':      return 'contacts.pasteNotes.intent.feedbackSurvey';
+    default:            return 'contacts.pasteNotes.intent.generalOutreach';
   }
 }
 

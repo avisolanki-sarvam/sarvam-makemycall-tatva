@@ -36,20 +36,31 @@ declare module 'phosphor-react-native' {
   // Icons used by the Tatva fork. Phosphor v3 ships every icon under a
   // *Icon-suffixed name (the un-suffixed `House` etc are JSDoc-deprecated
   // aliases). We only declare the suffixed form here. Keep alphabetised.
+  export const ArrowRightIcon: IconComponent;
   export const ArrowsClockwiseIcon: IconComponent;
   export const BellIcon: IconComponent;
   export const BriefcaseIcon: IconComponent;
+  export const CameraIcon: IconComponent;
+  export const CaretLeftIcon: IconComponent;
   export const CaretRightIcon: IconComponent;
   export const ChatCircleTextIcon: IconComponent;
   export const CheckIcon: IconComponent;
   export const CheckCircleIcon: IconComponent;
   export const ClockIcon: IconComponent;
+  export const ClipboardTextIcon: IconComponent;
+  export const DeviceMobileIcon: IconComponent;
+  export const EyeIcon: IconComponent;
+  export const EyeSlashIcon: IconComponent;
   export const GearIcon: IconComponent;
   export const HouseIcon: IconComponent;
   export const InfoIcon: IconComponent;
   export const LightningIcon: IconComponent;
+  export const MagnifyingGlassIcon: IconComponent;
   export const MegaphoneIcon: IconComponent;
+  export const MicrophoneIcon: IconComponent;
   export const PaperPlaneTiltIcon: IconComponent;
+  export const PencilIcon: IconComponent;
+  export const PencilSimpleIcon: IconComponent;
   export const PhoneIcon: IconComponent;
   export const PhoneCallIcon: IconComponent;
   export const PhoneOutgoingIcon: IconComponent;
@@ -57,10 +68,13 @@ declare module 'phosphor-react-native' {
   export const PlusIcon: IconComponent;
   export const QuestionIcon: IconComponent;
   export const SignOutIcon: IconComponent;
+  export const StopCircleIcon: IconComponent;
   export const StorefrontIcon: IconComponent;
   export const TranslateIcon: IconComponent;
+  export const TrashIcon: IconComponent;
   export const UsersIcon: IconComponent;
   export const WalletIcon: IconComponent;
   export const WhatsappLogoIcon: IconComponent;
+  export const XIcon: IconComponent;
   export const XCircleIcon: IconComponent;
 }

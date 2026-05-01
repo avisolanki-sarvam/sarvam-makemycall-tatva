@@ -11,11 +11,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.makemycall"
+      "backgroundColor": "#0e0e10"
     },
     "android": {
       "adaptiveIcon": {
@@ -26,12 +22,24 @@
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.READ_CONTACTS",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE"
       ],
       "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "pan",
       "navigationBar": {
-        "backgroundColor": "#ffffff",
-        "barStyle": "dark-content"
+        "backgroundColor": "#0e0e10",
+        "barStyle": "light-content"
+      }
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.makemycall",
+      "infoPlist": {
+        "NSContactsUsageDescription": "MakeMyCall needs access to your contacts so you can pick people to call.",
+        "NSUserNotificationsUsageDescription": "MakeMyCall sends you notifications about calls and updates."
       }
     },
     "web": {
@@ -42,7 +50,21 @@
       "expo-secure-store",
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "MakeMyCall needs access to your contacts so you can pick people to call."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#ffffff"
+        }
+      ],
+      "./plugins/with-extra-android-permissions",
+      "expo-asset"
     ]
   }
 }

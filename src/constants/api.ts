@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 // hatch — set EXPO_PUBLIC_API_URL=http://10.0.2.2:3000 to override.
 const LOCAL_IP = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
 
-const RAILWAY_URL = 'https://sarvam-makemycall-service-production-3699.up.railway.app';
+const RAILWAY_URL = 'https://sarvam-makemycall.up.railway.app';
 
 // Resolution order:
 //   1. EXPO_PUBLIC_API_URL  — explicit override at start time.

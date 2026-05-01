@@ -35,9 +35,11 @@ import {
 import { useRouter } from 'expo-router';
 import { AudioModule, useAudioRecorder, RecordingPresets } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../src/stores/authStore';
 import { api } from '../../src/services/api';
 import { COLORS } from '../../src/constants/api';
+import { TatvaIcon } from '../../src/components/TatvaIcon';
 
 const MAX_RECORDING_SECONDS = 60;
 const MIN_RECORDING_SECONDS = 1;
@@ -84,6 +86,7 @@ function deriveContextChip(args: {
   industry?: string | null;
   businessName?: string | null;
   language?: string | null;
+  fallback: string;
 }): string {
   const lang = languageLabel(args.language);
   const industry = humanizeIndustry(args.industry);
@@ -92,11 +95,12 @@ function deriveContextChip(args: {
     const name = args.businessName.trim();
     return lang ? `${name} · ${lang}` : name;
   }
-  return 'Your business';
+  return args.fallback;
 }
 
 export default function CreateAgentScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
 
   const [useCase, setUseCase] = useState('');
@@ -138,8 +142,8 @@ export default function CreateAgentScreen() {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
       if (!perm.granted) {
         Alert.alert(
-          'Microphone access needed',
-          'We need microphone permission to record your use case. Enable it in Settings.',
+          t('agents.new.alerts.micTitle'),
+          t('agents.new.alerts.micBody'),
         );
         return;
       }
@@ -160,8 +164,8 @@ export default function CreateAgentScreen() {
     } catch (err: any) {
       console.warn('[agents/new] startRecording failed:', err);
       Alert.alert(
-        'Could not start recording',
-        err?.message || 'Try again, or type your use case.',
+        t('agents.new.alerts.recordStartFailedTitle'),
+        err?.message || t('agents.new.alerts.recordStartFailedBody'),
       );
       setIsRecording(false);
     }
@@ -183,17 +187,17 @@ export default function CreateAgentScreen() {
       fileUri = audioRecorder.uri;
     } catch (err: any) {
       console.warn('[agents/new] stop recording failed:', err);
-      Alert.alert('Recording failed', err?.message || 'Please try again.');
+      Alert.alert(t('agents.new.alerts.recordFailedTitle'), err?.message || t('agents.new.alerts.recordFailedBody'));
       return;
     }
 
     if (!fileUri) {
-      Alert.alert('Recording failed', 'No audio was captured. Please try again.');
+      Alert.alert(t('agents.new.alerts.recordFailedTitle'), t('agents.new.alerts.recordEmptyBody'));
       return;
     }
 
     if (elapsed < MIN_RECORDING_SECONDS) {
-      Alert.alert('Tap and hold to speak', 'That recording was too short. Try again.');
+      Alert.alert(t('agents.new.alerts.tapHoldTitle'), t('agents.new.alerts.tapHoldBody'));
       return;
     }
 
@@ -209,14 +213,14 @@ export default function CreateAgentScreen() {
       });
       const text = (result.text || '').trim();
       if (!text) {
-        Alert.alert("Couldn't hear you clearly", 'Try again — speak a bit louder.');
+        Alert.alert(t('agents.new.alerts.couldntHearTitle'), t('agents.new.alerts.couldntHearBody'));
         return;
       }
       setUseCase(text);
     } catch (err: any) {
       Alert.alert(
-        'Transcription failed',
-        (err?.message || 'Could not transcribe.') + '\n\nYou can also type below.',
+        t('agents.new.alerts.transcribeFailedTitle'),
+        (err?.message || 'Could not transcribe.') + t('agents.new.alerts.transcribeFailedSuffix'),
       );
     } finally {
       setIsTranscribing(false);
@@ -226,7 +230,7 @@ export default function CreateAgentScreen() {
   const handleSubmit = async () => {
     const trimmed = useCase.trim();
     if (trimmed.length < 10) {
-      Alert.alert('Tell us a bit more', 'Describe what this assistant should do in a sentence or two.');
+      Alert.alert(t('agents.new.alerts.tellMoreTitle'), t('agents.new.alerts.tellMoreBody'));
       return;
     }
     setSubmitting(true);
@@ -250,7 +254,7 @@ export default function CreateAgentScreen() {
       // to /(tabs) on ready (where the new agent appears in the list).
       router.replace(`/agent-preview/${result.agent.id}?next=home`);
     } catch (err: any) {
-      Alert.alert('Could not create assistant', err?.message || 'Please try again.');
+      Alert.alert(t('agents.new.alerts.createFailedTitle'), err?.message || t('common.tryAgain'));
       setSubmitting(false);
     }
   };
@@ -259,6 +263,7 @@ export default function CreateAgentScreen() {
     industry: user?.industry,
     businessName: user?.businessName,
     language: user?.language,
+    fallback: t('agents.new.yourBusiness'),
   });
 
   return (
@@ -267,9 +272,9 @@ export default function CreateAgentScreen() {
         onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
         style={styles.headerBack}
         hitSlop={12}
-        accessibilityLabel="Back"
+        accessibilityLabel={t('common.back')}
       >
-        <Text style={styles.headerBackText}>← Back</Text>
+        <Text style={styles.headerBackText}>← {t('common.back')}</Text>
       </TouchableOpacity>
 
       {/* Persistent context chip — reminds the user their business profile
@@ -282,19 +287,17 @@ export default function CreateAgentScreen() {
       </View>
 
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>Naya assistant</Text>
-        <Text style={styles.title}>Yeh assistant kis kaam ke liye hai?</Text>
+        <Text style={styles.title}>{t('agents.new.heading')}</Text>
         <Text style={styles.subtitle}>
-          What should this assistant do? Aapka business profile already
-          saved hai — bas is assistant ka kaam batayein.
+          {t('agents.new.subtitle')}
         </Text>
       </View>
 
       <View style={styles.form}>
-        <Text style={styles.label}>Use case *</Text>
+        <Text style={styles.label}>{t('agents.new.useCaseLabel')}</Text>
         <TextInput
           style={[styles.input, styles.textArea]}
-          placeholder="Main apne students ko call karna chahta hoon ki kal ki class cancel ho gayi hai…"
+          placeholder={t('agents.new.useCasePlaceholder')}
           placeholderTextColor={COLORS.textMuted}
           value={useCase}
           onChangeText={setUseCase}
@@ -313,25 +316,30 @@ export default function CreateAgentScreen() {
           {isTranscribing ? (
             <>
               <ActivityIndicator size="small" color={COLORS.primary} />
-              <Text style={styles.recordButtonText}>Transcribing…</Text>
+              <Text style={styles.recordButtonText}>{t('common.transcribing')}</Text>
             </>
           ) : (
             <>
-              <Text style={styles.recordButtonIcon}>{isRecording ? '⏹' : '🎙'}</Text>
+              <TatvaIcon
+                name={isRecording ? 'stop' : 'microphone'}
+                size="sm"
+                color={isRecording ? COLORS.danger : COLORS.text}
+                strokeWidth={2.4}
+              />
               <Text style={[styles.recordButtonText, isRecording && styles.recordButtonTextActive]}>
                 {isRecording
-                  ? `Recording ${formatTime(recordingSeconds)} — tap to stop`
-                  : 'Or speak it instead — bolke bataiye'}
+                  ? t('agents.new.recordingActive', { time: formatTime(recordingSeconds) })
+                  : t('agents.new.voiceHint')}
               </Text>
             </>
           )}
         </TouchableOpacity>
         <Text style={styles.recordHelper}>
-          Voice is sent to Sarvam for transcription. Audio is not stored.
+          {t('agents.new.voiceFootnote')}
         </Text>
 
         <View style={styles.bulletList}>
-          {['What should this assistant do for you', 'When and why to call'].map((line) => (
+          {[t('agents.new.exampleHeading1'), t('agents.new.exampleHeading2')].map((line) => (
             <View key={line} style={styles.bulletRow}>
               <View style={styles.bulletDot} />
               <Text style={styles.bulletText}>{line}</Text>
@@ -347,7 +355,7 @@ export default function CreateAgentScreen() {
           {submitting ? (
             <ActivityIndicator color={COLORS.textOnInk} />
           ) : (
-            <Text style={styles.buttonText}>Create assistant</Text>
+            <Text style={styles.buttonText}>{t('agents.new.createCta')}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -442,7 +450,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.danger,
     backgroundColor: COLORS.statusDeclinedBg,
   },
-  recordButtonIcon: { fontSize: 16 },
   recordButtonText: { fontSize: 12, fontWeight: '500', color: COLORS.text },
   recordButtonTextActive: { color: COLORS.danger },
   recordHelper: {

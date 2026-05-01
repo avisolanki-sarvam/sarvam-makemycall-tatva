@@ -29,22 +29,22 @@ import { useAuthStore } from '../../src/stores/authStore';
 import { setAppLanguage, SupportedLang } from '../../src/i18n';
 import { TatvaColors, Radius, Type } from '../../src/constants/theme';
 
-interface LanguageOption {
-  code: string;
-  label: string;
-  native: string;
-}
-
 // Order: Hinglish first (recommended default for most users), then the
 // other Indian languages by speaker count, English last.
-const LANGUAGES: LanguageOption[] = [
-  { code: 'hi', label: 'Hinglish',      native: 'हिंदी (Hinglish)' },
-  { code: 'ta', label: 'Tamil',         native: 'தமிழ்' },
-  { code: 'te', label: 'Telugu',        native: 'తెలుగు' },
-  { code: 'kn', label: 'Kannada',       native: 'ಕನ್ನಡ' },
-  { code: 'mr', label: 'Marathi',       native: 'मराठी' },
-  { code: 'bn', label: 'Bengali',       native: 'বাংলা' },
-  { code: 'en', label: 'English',       native: 'English' },
+//
+// `label` is rendered through t('language.options.<code>') at render time
+// so the language name appears in the UI's current language. `native` is
+// the language's own self-name in its native script — kept constant so a
+// user can always pick out their language even if the UI is set to one
+// they don't read.
+const LANGUAGES: { code: string; native: string }[] = [
+  { code: 'hi', native: 'हिंदी (Hinglish)' },
+  { code: 'ta', native: 'தமிழ்' },
+  { code: 'te', native: 'తెలుగు' },
+  { code: 'kn', native: 'ಕನ್ನಡ' },
+  { code: 'mr', native: 'मराठी' },
+  { code: 'bn', native: 'বাংলা' },
+  { code: 'en', native: 'English' },
 ];
 
 export default function LanguageScreen() {
@@ -72,7 +72,7 @@ export default function LanguageScreen() {
       setAppLanguage(selected as SupportedLang);
       router.back();
     } catch (e: any) {
-      Alert.alert('Could not save', e?.message || 'Try again.');
+      Alert.alert(t('common.errors.couldNotSave'), e?.message || t('common.tryAgain'));
     } finally {
       setSaving(false);
     }
@@ -106,7 +106,7 @@ export default function LanguageScreen() {
                 accessibilityState={{ selected: isActive }}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.rowLabel}>{lang.label}</Text>
+                  <Text style={styles.rowLabel}>{t(`language.options.${lang.code}`)}</Text>
                   <Text style={styles.rowNative}>{lang.native}</Text>
                 </View>
                 {isActive && (

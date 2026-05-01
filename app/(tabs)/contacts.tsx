@@ -12,25 +12,32 @@ import {
   Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
+import { ClipboardTextIcon, DeviceMobileIcon } from 'phosphor-react-native';
 import { useContactStore, type Contact } from '../../src/stores/contactStore';
 import { api } from '../../src/services/api';
 import { COLORS } from '../../src/constants/api';
 import { loadDeviceContacts, type DeviceContact } from '../../src/services/contactImport';
+import { TatvaIcon } from '../../src/components/TatvaIcon';
 
 // 4 add modes surfaced as prominent buttons at the top of the Contacts
 // tab. Each routes to /contacts/import with the matching mode pre-selected.
 // /contacts/import is now agent-optional — entered from here without an
 // agentId, it runs in save-only mode (no campaign launch).
+//
+// Order matters: "Screenshot" is first because the killer use case for
+// our SMB audience is photographing or screenshotting an existing
+// contact list (WhatsApp group, register page) — Sarvam Vision OCR
+// turns it into structured contacts in one step.
 const ADD_MODES: Array<{
   mode: 'paste' | 'photo' | 'voice' | 'contacts';
-  label: string;
-  icon: keyof typeof Feather.glyphMap;
+  labelKey: string;
+  icon: 'upload' | 'phone' | 'paste' | 'microphone';
 }> = [
-  { mode: 'paste', label: 'Paste', icon: 'edit-3' },
-  { mode: 'photo', label: 'Photo', icon: 'camera' },
-  { mode: 'voice', label: 'Voice', icon: 'mic' },
-  { mode: 'contacts', label: 'From phone', icon: 'smartphone' },
+  { mode: 'photo', labelKey: 'contacts.addModes.photo', icon: 'upload' },
+  { mode: 'contacts', labelKey: 'contacts.addModes.fromPhone', icon: 'phone' },
+  { mode: 'paste', labelKey: 'contacts.addModes.paste', icon: 'paste' },
+  { mode: 'voice', labelKey: 'contacts.addModes.voice', icon: 'microphone' },
 ];
 
 // Starter-key suggestions. Free-form: tapping a chip just pre-fills the key,
@@ -64,6 +71,7 @@ function subtitleFor(c: Contact): string {
 
 export default function ContactsScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const {
     contacts,
     searchQuery,
@@ -143,7 +151,7 @@ export default function ContactsScreen() {
 
   const handleAddContact = async () => {
     if (!newName.trim() || !newPhone.trim()) {
-      Alert.alert('Required', 'Name and phone number are required.');
+      Alert.alert(t('contacts.alerts.requiredTitle'), t('contacts.alerts.requiredBody'));
       return;
     }
     const customFields = buildCustomFields();
@@ -187,7 +195,7 @@ export default function ContactsScreen() {
       if (!res.ok) {
         setImportOpen(false);
         Alert.alert(
-          res.reason === 'denied' ? 'Permission needed' : 'Phone book unavailable',
+          res.reason === 'denied' ? t('contacts.alerts.permissionDeniedTitle') : t('contacts.alerts.phoneBookUnavailableTitle'),
           res.message,
         );
         return;
@@ -199,7 +207,7 @@ export default function ContactsScreen() {
       setDeviceContacts(fresh);
     } catch (err: any) {
       setImportOpen(false);
-      Alert.alert('Could not load contacts', err?.message || 'Try again.');
+      Alert.alert(t('contacts.alerts.couldNotLoadTitle'), err?.message || t('common.tryAgain'));
     } finally {
       setImportLoading(false);
     }
@@ -224,7 +232,7 @@ export default function ContactsScreen() {
   const submitImport = async () => {
     const picks = deviceContacts.filter((c) => importSelected.has(c.id));
     if (picks.length === 0) {
-      Alert.alert('Pick at least one', 'Tap the contacts you want to import.');
+      Alert.alert(t('contacts.alerts.pickAtLeastOneTitle'), t('contacts.alerts.pickAtLeastOneBody'));
       return;
     }
     setImportSubmitting(true);
@@ -241,13 +249,14 @@ export default function ContactsScreen() {
         setContacts([...contacts, ...res.created]);
       }
       setImportOpen(false);
+      const addedCount = res?.createdCount ?? picks.length;
       Alert.alert(
-        'Import complete',
-        `Added ${res?.createdCount ?? picks.length}` +
+        t('contacts.alerts.importCompleteTitle'),
+        t('contacts.alerts.importCompleteBody', { count: addedCount }) +
           (res?.skippedCount ? `, skipped ${res.skippedCount} duplicate(s)` : ''),
       );
     } catch (err: any) {
-      Alert.alert('Import failed', err?.message || 'Try again.');
+      Alert.alert(t('contacts.alerts.importFailedTitle'), err?.message || t('common.tryAgain'));
     } finally {
       setImportSubmitting(false);
     }
@@ -263,22 +272,25 @@ export default function ContactsScreen() {
           search row are gone — these explicit, labelled tiles are
           discoverable at a glance. */}
       <View style={styles.addModeSection}>
-        <Text style={styles.addModeSectionLabel}>Add contacts</Text>
+        <Text style={styles.addModeSectionLabel}>{t('contacts.addTitle')}</Text>
         <View style={styles.addModeRow}>
-          {ADD_MODES.map((m) => (
-            <TouchableOpacity
-              key={m.mode}
-              style={styles.addModeTile}
-              onPress={() => router.push(`/contacts/import?mode=${m.mode}`)}
-              accessibilityRole="button"
-              accessibilityLabel={`Add contacts via ${m.label}`}
-            >
-              <View style={styles.addModeIcon}>
-                <Feather name={m.icon} size={16} color={COLORS.ink} />
-              </View>
-              <Text style={styles.addModeLabel}>{m.label}</Text>
-            </TouchableOpacity>
-          ))}
+          {ADD_MODES.map((m) => {
+            const label = t(m.labelKey);
+            return (
+              <TouchableOpacity
+                key={m.mode}
+                style={styles.addModeTile}
+                onPress={() => router.push(`/contacts/import?mode=${m.mode}`)}
+                accessibilityRole="button"
+                accessibilityLabel={t('contacts.modeA11y', { mode: label })}
+              >
+                <View style={styles.addModeIcon}>
+                  <AddModeIcon name={m.icon} />
+                </View>
+                <Text style={styles.addModeLabel}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
@@ -289,7 +301,7 @@ export default function ContactsScreen() {
       <View style={styles.searchRow}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search contacts..."
+          placeholder={t('contacts.searchPlaceholder')}
           placeholderTextColor={COLORS.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -297,7 +309,7 @@ export default function ContactsScreen() {
         <TouchableOpacity
           style={styles.addBtn}
           onPress={() => (showAddForm ? resetForm() : setShowAddForm(true))}
-          accessibilityLabel={showAddForm ? 'Close manual add' : 'Add a single contact manually'}
+          accessibilityLabel={showAddForm ? t('contacts.closeManualA11y') : t('contacts.openManualA11y')}
         >
           <Text style={styles.addBtnText}>{showAddForm ? '✕' : '+'}</Text>
         </TouchableOpacity>
@@ -308,14 +320,14 @@ export default function ContactsScreen() {
         <ScrollView style={styles.addForm} contentContainerStyle={styles.addFormInner}>
           <TextInput
             style={styles.formInput}
-            placeholder="Name"
+            placeholder={t('contacts.namePlaceholder')}
             placeholderTextColor={COLORS.textMuted}
             value={newName}
             onChangeText={setNewName}
           />
           <TextInput
             style={styles.formInput}
-            placeholder="Phone number"
+            placeholder={t('contacts.phonePlaceholder')}
             placeholderTextColor={COLORS.textMuted}
             value={newPhone}
             onChangeText={setNewPhone}
@@ -324,9 +336,9 @@ export default function ContactsScreen() {
 
           {/* Custom fields — free-form key/value rows */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Anything I should know?</Text>
+            <Text style={styles.sectionLabel}>{t('contacts.anythingHeading')}</Text>
             <Text style={styles.sectionHint}>
-              e.g. pending amount, due date — or skip and use notes below.
+              {t('contacts.anythingHint')}
             </Text>
 
             {/* Suggestion chips */}
@@ -342,17 +354,17 @@ export default function ContactsScreen() {
               <View key={i} style={styles.kvRow}>
                 <TextInput
                   style={[styles.formInput, styles.kvKey]}
-                  placeholder="Kya (e.g. pending)"
+                  placeholder={t('contacts.fieldKeyPlaceholder')}
                   placeholderTextColor={COLORS.textMuted}
                   value={row.key}
-                  onChangeText={(t) => updateKvKey(i, t)}
+                  onChangeText={(text) => updateKvKey(i, text)}
                 />
                 <TextInput
                   style={[styles.formInput, styles.kvValue]}
-                  placeholder="Kitna (e.g. 1500)"
+                  placeholder={t('contacts.fieldValuePlaceholder')}
                   placeholderTextColor={COLORS.textMuted}
                   value={row.value}
-                  onChangeText={(t) => updateKvValue(i, t)}
+                  onChangeText={(text) => updateKvValue(i, text)}
                 />
                 <TouchableOpacity style={styles.kvRemove} onPress={() => removeKvRow(i)}>
                   <Text style={styles.kvRemoveText}>−</Text>
@@ -361,19 +373,19 @@ export default function ContactsScreen() {
             ))}
 
             <TouchableOpacity style={styles.addRowBtn} onPress={addKvRow}>
-              <Text style={styles.addRowBtnText}>+ Aur detail jodein</Text>
+              <Text style={styles.addRowBtnText}>{t('contacts.addMoreFields')}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Notes blob */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Notes</Text>
+            <Text style={styles.sectionLabel}>{t('contacts.notesLabel')}</Text>
             <Text style={styles.sectionHint}>
-              Free text. "udhaar 2400, bohot purana customer" works fine.
+              {t('contacts.notesHint')}
             </Text>
             <TextInput
               style={[styles.formInput, styles.notesInput]}
-              placeholder="Anything else..."
+              placeholder={t('contacts.notesPlaceholder')}
               placeholderTextColor={COLORS.textMuted}
               value={newNotes}
               onChangeText={setNewNotes}
@@ -384,7 +396,7 @@ export default function ContactsScreen() {
           </View>
 
           <TouchableOpacity style={styles.saveBtn} onPress={handleAddContact}>
-            <Text style={styles.saveBtnText}>Save contact</Text>
+            <Text style={styles.saveBtnText}>{t('contacts.saveContact')}</Text>
           </TouchableOpacity>
         </ScrollView>
       )}
@@ -396,9 +408,9 @@ export default function ContactsScreen() {
         </View>
       ) : filtered.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyTitle}>No contacts yet</Text>
+          <Text style={styles.emptyTitle}>{t('contacts.emptyTitle')}</Text>
           <Text style={styles.emptySubtext}>
-            Tap the + button to add your first contact
+            {t('contacts.emptyBody')}
           </Text>
         </View>
       ) : (
@@ -407,7 +419,16 @@ export default function ContactsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <View style={styles.contactCard}>
+            // The row is now tappable end-to-end → opens the edit screen.
+            // The trailing pencil icon makes the affordance visible without
+            // forcing the user to "discover" the tap target.
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.contactCard}
+              onPress={() => router.push(`/contacts/${item.id}/edit`)}
+              accessibilityRole="button"
+              accessibilityLabel={t('contacts.editA11y', { name: item.name })}
+            >
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
                   {item.name.charAt(0).toUpperCase()}
@@ -419,7 +440,10 @@ export default function ContactsScreen() {
                   {subtitleFor(item)}
                 </Text>
               </View>
-            </View>
+              <View style={styles.contactEditIcon} hitSlop={6 as any}>
+                <TatvaIcon name="edit" size="sm" tone="secondary" />
+              </View>
+            </TouchableOpacity>
           )}
         />
       )}
@@ -434,25 +458,25 @@ export default function ContactsScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setImportOpen(false)} hitSlop={10}>
-              <Text style={styles.modalClose}>Cancel</Text>
+              <Text style={styles.modalClose}>{t('common.cancel')}</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Import from phone</Text>
+            <Text style={styles.modalTitle}>{t('contacts.import.headerTitle')}</Text>
             <Text style={styles.modalCount}>
-              {importSelected.size > 0 ? `${importSelected.size} picked` : ' '}
+              {importSelected.size > 0 ? t('contacts.import.pickedCount', { count: importSelected.size }) : ' '}
             </Text>
           </View>
 
           {importLoading ? (
             <View style={styles.center}>
               <ActivityIndicator size="large" color={COLORS.primary} />
-              <Text style={styles.emptySubtext}>Reading your phone book…</Text>
+              <Text style={styles.emptySubtext}>{t('contacts.import.loading')}</Text>
             </View>
           ) : (
             <>
               <View style={[styles.searchRow, { paddingTop: 6 }]}>
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search by name or number"
+                  placeholder={t('contacts.import.search')}
                   placeholderTextColor={COLORS.textMuted}
                   value={importSearch}
                   onChangeText={setImportSearch}
@@ -461,9 +485,9 @@ export default function ContactsScreen() {
 
               {filteredDeviceContacts.length === 0 ? (
                 <View style={styles.center}>
-                  <Text style={styles.emptyTitle}>Nothing new to import</Text>
+                  <Text style={styles.emptyTitle}>{t('contacts.import.nothingNewTitle')}</Text>
                   <Text style={styles.emptySubtext}>
-                    Every contact in your phone book is already saved here.
+                    {t('contacts.import.nothingNewBody')}
                   </Text>
                 </View>
               ) : (
@@ -508,8 +532,8 @@ export default function ContactsScreen() {
                   ) : (
                     <Text style={styles.saveBtnText}>
                       {importSelected.size > 0
-                        ? `Import ${importSelected.size} contact${importSelected.size === 1 ? '' : 's'}`
-                        : 'Pick contacts to import'}
+                        ? t('contacts.import.importCount', { count: importSelected.size })
+                        : t('contacts.import.pickToImport')}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -520,6 +544,19 @@ export default function ContactsScreen() {
       </Modal>
     </View>
   );
+}
+
+function AddModeIcon({ name }: { name: (typeof ADD_MODES)[number]['icon'] }) {
+  if (name === 'upload') {
+    return <TatvaIcon name="upload" size="lg" tone="brand" />;
+  }
+  if (name === 'microphone') {
+    return <TatvaIcon name="microphone" size="lg" tone="brand" />;
+  }
+  if (name === 'phone') {
+    return <DeviceMobileIcon size={20} color={COLORS.ink} weight="regular" />;
+  }
+  return <ClipboardTextIcon size={20} color={COLORS.ink} weight="regular" />;
 }
 
 const styles = StyleSheet.create({
@@ -548,17 +585,15 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderWidth: 0.5,
     borderColor: COLORS.borderSoft,
-    borderRadius: 10,
-    paddingVertical: 12,
+    borderRadius: 8,
+    paddingVertical: 13,
     paddingHorizontal: 8,
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
   },
   addModeIcon: {
-    width: 30,
+    width: 36,
     height: 30,
-    borderRadius: 8,
-    backgroundColor: COLORS.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -681,6 +716,14 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: COLORS.borderSoft,
     gap: 12,
+  },
+  // Trailing pencil icon — visual cue that the row is tappable to edit.
+  contactEditIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatar: {
     width: 40,

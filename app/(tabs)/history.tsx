@@ -126,7 +126,7 @@ export default function CampaignsScreen() {
           style={styles.iconBtn}
           onPress={onRefresh}
           activeOpacity={0.6}
-          accessibilityLabel="Refresh campaigns"
+          accessibilityLabel={t('agentsTab.refresh')}
         >
           <ArrowsClockwiseIcon size={20} color={TatvaColors.contentSecondary} weight="regular" />
         </TouchableOpacity>
@@ -217,6 +217,7 @@ function Divider() {
 
 // ─── Campaign card ────────────────────────────────────────────────────────
 function CampaignCard({ item, onPress }: { item: CampaignRow; onPress: () => void }) {
+  const { t } = useTranslation();
   const status = StatusToTatva[item.status as CampaignStatus] || StatusToTatva.scheduled;
   const sent = item.totalContacts ?? 0;
   const connected = item.completedCount ?? 0;
@@ -239,7 +240,7 @@ function CampaignCard({ item, onPress }: { item: CampaignRow; onPress: () => voi
         <View style={[cardStyles.chip, { backgroundColor: status.bg }]}>
           <StatusIconCmp size={11} color={status.fg} weight="bold" />
           <Text style={[cardStyles.chipText, { color: status.fg }]}>
-            {status.label}
+            {t(`campaigns.status.${statusToKey(item.status)}`)}
           </Text>
         </View>
       </View>
@@ -247,19 +248,19 @@ function CampaignCard({ item, onPress }: { item: CampaignRow; onPress: () => voi
       <View style={cardStyles.kpiRow}>
         <Kpi
           icon={<PaperPlaneTiltIcon size={12} color={TatvaColors.contentTertiary} weight="regular" />}
-          label="Targeted"
+          label={t('campaigns.kpi.targeted')}
           value={sent}
           tone={TatvaColors.contentPrimary}
         />
         <Kpi
           icon={<CheckCircleIcon size={12} color={TatvaColors.positiveContent} weight="regular" />}
-          label="Connected"
+          label={t('campaigns.kpi.connected')}
           value={connected}
           tone={TatvaColors.positiveContent}
         />
         <Kpi
           icon={<ClockIcon size={12} color={TatvaColors.dangerContent} weight="regular" />}
-          label="Pending"
+          label={t('campaigns.kpi.pending')}
           value={pending}
           tone={TatvaColors.dangerContent}
         />
@@ -268,7 +269,7 @@ function CampaignCard({ item, onPress }: { item: CampaignRow; onPress: () => voi
       <View style={cardStyles.creditsRow}>
         <WalletIcon size={12} color={TatvaColors.contentTertiary} weight="regular" />
         <Text style={cardStyles.creditsText}>
-          Credits used:{' '}
+          {t('campaigns.creditsUsed')}{' '}
           <Text style={{ color: TatvaColors.contentPrimary, fontWeight: '600' }}>
             {item.creditsCharged ?? 0}
           </Text>
@@ -296,6 +297,18 @@ function Kpi({
       <Text style={[cardStyles.kpiValue, { color: tone }]}>{value}</Text>
     </View>
   );
+}
+
+// Map a backend campaign status to the i18n key under campaigns.status.*.
+// Backend uses 'active' for in-flight calling and 'completed' for finished
+// campaigns; the translation catalog uses 'calling' / 'done' to match the
+// way the UI talks about them.
+function statusToKey(status: string): string {
+  switch (status) {
+    case 'active':    return 'calling';
+    case 'completed': return 'done';
+    default:          return status;
+  }
 }
 
 function statusIconFor(status: string) {

@@ -4,16 +4,20 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TextInput,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
   FlatList,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { CheckIcon } from 'phosphor-react-native';
+import { useTranslation } from 'react-i18next';
 import { COLORS } from '../../src/constants/api';
 import { TatvaColors } from '../../src/constants/theme';
+// Tatva-aligned text-field primitive — mirrors the Tatva web `Input` API
+// (label, error, helperText, prefix, size 'sm'|'md'|'lg', leading icon).
+// Use this instead of raw RN <TextInput> so the wizard inherits the
+// system's pill silhouette, focus tone, and helper/error treatment.
+import { Input, SearchBar } from '../../src/components/Input';
 import { api, readEnvelope } from '../../src/services/api';
 import { useContactStore, type Contact } from '../../src/stores/contactStore';
 import {
@@ -101,6 +105,7 @@ const SCHEDULE_PRESETS = [
 
 export default function NewCampaignScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   // Optional ?agentId= picks WHICH agent this campaign belongs to. Used by
   // the home screen's per-agent "Create campaign" buttons in the multi-
   // agent UX. When absent (legacy entry from a tab/+ button), the bootstrap
@@ -169,7 +174,7 @@ export default function NewCampaignScreen() {
         setAgentName(a.name);
       }
     } catch (e: any) {
-      setError(e?.message || 'Could not load. Pull to refresh.');
+      setError(e?.message || t('campaigns.new.couldNotLoadFallback'));
     } finally {
       setLoading(false);
     }
@@ -209,13 +214,13 @@ export default function NewCampaignScreen() {
           setValid(true);
         } else {
           setValid(false);
-          setValidateError(env.hint || raw?.errors?.[0]?.hint || 'Assistant is not ready.');
+          setValidateError(env.hint || raw?.errors?.[0]?.hint || t('campaigns.new.assistantNotReady'));
           setValidateErrorCode(raw?.errors?.[0]?.code || null);
         }
       } catch (err: any) {
         if (cancelled) return;
         setValid(false);
-        setValidateError(err?.message || 'Could not check assistant status.');
+        setValidateError(err?.message || t('campaigns.new.couldNotCheckAssistant'));
       } finally {
         if (!cancelled) setValidating(false);
       }
@@ -247,23 +252,23 @@ export default function NewCampaignScreen() {
 
   const launch = async () => {
     if (!agentId) {
-      Alert.alert('No assistant', 'Set up your AI assistant before launching a campaign.');
+      Alert.alert(t('campaigns.new.alerts.noAgentTitle'), t('campaigns.new.alerts.noAgentBody'));
       return;
     }
     if (draft.selectedContactIds.length === 0) {
-      Alert.alert('No one to call', 'Pick at least one contact.');
+      Alert.alert(t('campaigns.new.alerts.noContactsTitle'), t('campaigns.new.alerts.noContactsBody'));
       return;
     }
     if (valid !== true) {
       // Defensive — the CTA should already be disabled in this case.
-      Alert.alert('Assistant not ready', validateError || 'Please try again in a moment.');
+      Alert.alert(t('campaigns.new.alerts.agentNotReadyTitle'), validateError || t('campaigns.new.alerts.agentNotReadyBody'));
       return;
     }
     const cost = draft.selectedContactIds.length;
     if (creditBalance < cost) {
       Alert.alert(
-        'Need more credits',
-        `This campaign costs ${cost} credits. You have ${creditBalance}.`,
+        t('campaigns.new.alerts.needCreditsTitle'),
+        t('campaigns.new.alerts.needCreditsBody', { cost, balance: creditBalance }),
       );
       return;
     }
@@ -292,9 +297,9 @@ export default function NewCampaignScreen() {
         return;
       }
       // 200 with success=false (insufficient credits, agent not ready, etc.)
-      Alert.alert('Could not launch', env.hint || 'Try again.');
+      Alert.alert(t('campaigns.new.alerts.couldNotLaunchTitle'), env.hint || t('common.tryAgain'));
     } catch (e: any) {
-      Alert.alert('Could not launch', e?.message || 'Try again.');
+      Alert.alert(t('campaigns.new.alerts.couldNotLaunchTitle'), e?.message || t('common.tryAgain'));
     } finally {
       setSubmitting(false);
     }
@@ -305,16 +310,19 @@ export default function NewCampaignScreen() {
   const renderHeader = (title: string) => (
     <View style={styles.header}>
       <TouchableOpacity onPress={goPrev} hitSlop={12} style={styles.backBtn}>
-        <Text style={styles.backTxt}>← Back</Text>
+        <Text style={styles.backTxt}>← {t('common.back')}</Text>
       </TouchableOpacity>
       <StepProgress current={stepIndex} total={STEP_ORDER.length} />
       <Text style={styles.title}>{title}</Text>
     </View>
   );
 
-  // 4-segment tick progress bar. Completed segments fill solid + show a small
-  // check at the right edge; the current segment shows the indigo accent;
-  // future segments stay neutral. Replaces the prior "Step 1 of 4" text.
+  // 4-segment progress bar. Completed segments fill solid (brand inverse on
+  // dark, brand primary on light); the current segment uses the indigo
+  // accent; future segments stay neutral. No glyph inside — the colour
+  // alone communicates progress, matching Tatva's `Stepper` (simple track
+  // segments, no per-step check icon). Replaces the prior "Step 1 of 4"
+  // text and the noisier check-per-segment variant.
   function StepProgress({ current, total }: { current: number; total: number }) {
     return (
       <View style={styles.progressRow}>
@@ -329,11 +337,7 @@ export default function NewCampaignScreen() {
                 isDone && styles.progressSegDone,
                 isCurrent && styles.progressSegCurrent,
               ]}
-            >
-              {isDone ? (
-                <CheckIcon size={10} color={TatvaColors.contentInverse} weight="bold" />
-              ) : null}
-            </View>
+            />
           );
         })}
       </View>
@@ -344,70 +348,124 @@ export default function NewCampaignScreen() {
 
   const filtered = getFilteredContacts();
 
+  // Whole-store check (filtered.length is a per-search filter; we want to
+  // know if there are zero saved contacts at all so the empty-state
+  // path-of-no-search-input renders correctly).
+  const hasAnyContacts = contacts.length > 0;
+
   const renderContactsStep = () => (
     <>
-      {renderHeader('Who should I call?')}
-      <View style={styles.searchRow}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by name or number"
-          placeholderTextColor={COLORS.textMuted}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
-      {filtered.length === 0 ? (
-        <View style={styles.emptyBlock}>
-          <Text style={styles.emptyTitle}>No contacts yet</Text>
-          <Text style={styles.emptyText}>
-            Add contacts on the Contacts tab first.
+      {renderHeader(t('campaigns.new.step1Title'))}
+
+      {/* When there are zero saved contacts, hide the search bar entirely
+          — its presence was misleading users into thinking they could type
+          a new contact's name there. Show only a strong empty state with
+          a primary CTA that drops them onto the Contacts tab. */}
+      {!hasAnyContacts ? (
+        <View style={styles.emptyHero}>
+          <Text style={styles.emptyHeroTitle}>
+            {t('campaigns.new.noContactsTitle')}
           </Text>
+          <Text style={styles.emptyHeroBody}>
+            {t('campaigns.new.noContactsBody')}
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyHeroCta}
+            onPress={() => router.push('/(tabs)/contacts')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.emptyHeroCtaText}>
+              {t('campaigns.new.goAddContacts')}
+            </Text>
+          </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(c) => c.id}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12 }}
-          renderItem={({ item }) => {
-            const picked = draft.selectedContactIds.includes(item.id);
-            const subtitle = subtitleFor(item);
-            return (
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={[styles.contactCard, picked && styles.contactCardPicked]}
-                onPress={() => draft.toggleContact(item.id)}
-              >
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {item.name.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.contactName}>{item.name}</Text>
-                  <Text style={styles.contactSub} numberOfLines={1}>{subtitle}</Text>
-                </View>
-                <View style={[styles.check, picked && styles.checkPicked]}>
-                  {picked && <Text style={styles.checkMark}>✓</Text>}
-                </View>
-              </TouchableOpacity>
-            );
-          }}
-        />
+        <>
+          {/* Search row — leading magnifying-glass icon + a "manage" link
+              on the right so the user always has an escape hatch from the
+              wizard back to the Contacts tab. Uses the Tatva SearchBar
+              primitive: pill silhouette + built-in clear (×). */}
+          <View style={styles.searchRow}>
+            <View style={{ flex: 1 }}>
+              <SearchBar
+                placeholder={t('campaigns.new.searchPlaceholder')}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                size="md"
+              />
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/contacts')}
+              hitSlop={6}
+              style={styles.manageBtn}
+            >
+              <Text style={styles.manageBtnText}>
+                {t('campaigns.new.manage')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {filtered.length === 0 ? (
+            <View style={styles.emptyBlock}>
+              <Text style={styles.emptyTitle}>
+                {t('campaigns.new.noMatchesTitle')}
+              </Text>
+              <Text style={styles.emptyText}>
+                {t('campaigns.new.noMatchesBody')}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filtered}
+              keyExtractor={(c) => c.id}
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12 }}
+              renderItem={({ item }) => {
+                const picked = draft.selectedContactIds.includes(item.id);
+                const subtitle = subtitleFor(item);
+                return (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={[styles.contactCard, picked && styles.contactCardPicked]}
+                    onPress={() => draft.toggleContact(item.id)}
+                  >
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>
+                        {item.name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.contactName}>{item.name}</Text>
+                      <Text style={styles.contactSub} numberOfLines={1}>{subtitle}</Text>
+                    </View>
+                    <View style={[styles.check, picked && styles.checkPicked]}>
+                      {picked && <Text style={styles.checkMark}>✓</Text>}
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          )}
+        </>
       )}
-      <View style={styles.footer}>
-        <Text style={styles.footerSummary}>
-          {draft.selectedContactIds.length > 0
-            ? `${draft.selectedContactIds.length} selected`
-            : 'Pick at least one contact'}
-        </Text>
-        <TouchableOpacity
-          style={[styles.primaryBtn, draft.selectedContactIds.length === 0 && styles.btnDisabled]}
-          disabled={draft.selectedContactIds.length === 0}
-          onPress={goNext}
-        >
-          <Text style={styles.primaryBtnText}>Next — schedule</Text>
-        </TouchableOpacity>
-      </View>
+
+      {/* Footer is rendered only when the user has contacts to pick from
+          — without any contacts there's nothing to advance to. */}
+      {hasAnyContacts ? (
+        <View style={styles.footer}>
+          <Text style={styles.footerSummary}>
+            {draft.selectedContactIds.length > 0
+              ? t('campaigns.new.selectedCount', { count: draft.selectedContactIds.length })
+              : t('campaigns.new.pickAtLeastOne')}
+          </Text>
+          <TouchableOpacity
+            style={[styles.primaryBtn, draft.selectedContactIds.length === 0 && styles.btnDisabled]}
+            disabled={draft.selectedContactIds.length === 0}
+            onPress={goNext}
+          >
+            <Text style={styles.primaryBtnText}>{t('campaigns.new.nextSchedule')}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </>
   );
 
@@ -450,12 +508,12 @@ export default function NewCampaignScreen() {
 
   const renderScheduleStep = () => (
     <ScrollView contentContainerStyle={styles.contentPad}>
-      {renderHeader('When should I call?')}
+      {renderHeader(t('campaigns.new.step2Title'))}
 
       <RadioRow
         active={draft.scheduleMode === 'now'}
-        title="Call now"
-        subtitle="Start as soon as I tap Launch"
+        title={t('campaigns.new.callNow')}
+        subtitle={t('campaigns.new.callNowSub')}
         onPress={() => {
           draft.setScheduleMode('now');
           draft.setScheduledAt(null);
@@ -463,14 +521,14 @@ export default function NewCampaignScreen() {
       />
       <RadioRow
         active={draft.scheduleMode === 'later'}
-        title="Schedule for later"
-        subtitle="Pick a start time"
+        title={t('campaigns.new.scheduleLater')}
+        subtitle={t('campaigns.new.scheduleLaterSub')}
         onPress={() => draft.setScheduleMode('later')}
       />
 
       {draft.scheduleMode === 'later' && (
         <View style={styles.presetWrap}>
-          <Text style={styles.presetLabel}>Pick a time:</Text>
+          <Text style={styles.presetLabel}>{t('campaigns.new.pickATime')}</Text>
           <View style={styles.presetRow}>
             {SCHEDULE_PRESETS.map((p, i) => {
               const { iso, label } = p();
@@ -494,51 +552,45 @@ export default function NewCampaignScreen() {
           The day picker is intentionally minimal for v1 — most customers run
           the whole campaign in one sitting. */}
       <View style={styles.windowBlock}>
-        <Text style={styles.windowLabelHi}>Call timing window</Text>
-        <Text style={styles.windowLabelEn}>Calls go out only between these times</Text>
+        <Text style={styles.windowLabelHi}>{t('campaigns.new.windowTitle')}</Text>
+        <Text style={styles.windowLabelEn}>{t('campaigns.new.windowSub')}</Text>
         <View style={styles.timeRow}>
           <View style={styles.timeField}>
-            <Text style={styles.timeFieldLabel}>From / Se</Text>
-            <TextInput
-              style={[
-                styles.timeInput,
-                !normalizedStart && styles.timeInputInvalid,
-              ]}
+            <Input
+              label={t('campaigns.new.fromLabel')}
               value={startTimeText}
               onChangeText={setStartTimeText}
               onBlur={commitStartTime}
-              placeholder="11:00"
-              placeholderTextColor={COLORS.textMuted}
+              placeholder={t('campaigns.new.fromPlaceholder')}
               keyboardType="numbers-and-punctuation"
               maxLength={5}
               autoCorrect={false}
+              size="sm"
+              error={!normalizedStart && startTimeText ? ' ' : undefined}
             />
           </View>
           <View style={styles.timeField}>
-            <Text style={styles.timeFieldLabel}>To / Tak</Text>
-            <TextInput
-              style={[
-                styles.timeInput,
-                !normalizedEnd && styles.timeInputInvalid,
-              ]}
+            <Input
+              label={t('campaigns.new.toLabel')}
               value={endTimeText}
               onChangeText={setEndTimeText}
               onBlur={commitEndTime}
-              placeholder="19:00"
-              placeholderTextColor={COLORS.textMuted}
+              placeholder={t('campaigns.new.toPlaceholder')}
               keyboardType="numbers-and-punctuation"
               maxLength={5}
               autoCorrect={false}
+              size="sm"
+              error={!normalizedEnd && endTimeText ? ' ' : undefined}
             />
           </View>
         </View>
         <Text style={styles.windowHint}>
-          Type the hour like 8 or 08 — we'll normalise to HH:MM. Timezone: Asia/Kolkata.
+          {t('campaigns.new.windowHint')}
         </Text>
         {normalizedStart &&
           normalizedEnd &&
           normalizedStart >= normalizedEnd && (
-            <Text style={styles.windowError}>End time must be after start time.</Text>
+            <Text style={styles.windowError}>{t('campaigns.new.windowError')}</Text>
           )}
       </View>
 
@@ -549,7 +601,7 @@ export default function NewCampaignScreen() {
           disabled={!scheduleStepReady}
           onPress={goNext}
         >
-          <Text style={styles.primaryBtnText}>Next — variables</Text>
+          <Text style={styles.primaryBtnText}>{t('campaigns.new.nextVariables')}</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -559,33 +611,35 @@ export default function NewCampaignScreen() {
 
   const renderVariablesStep = () => (
     <ScrollView contentContainerStyle={styles.contentPad}>
-      {renderHeader('Anything to share with all of them?')}
+      {renderHeader(t('campaigns.new.varsTitle'))}
       <Text style={styles.hint}>
-        Optional. These are values used the same way for everyone in this campaign — like a
-        common deadline or location. Per-contact details (their pending amount, last visit,
-        etc.) are picked up from the contact's saved info automatically.
+        {t('campaigns.new.varsSub')}
       </Text>
 
       {varRows.map((row, i) => (
         <View key={i} style={styles.kvRow}>
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            placeholder="Field"
-            placeholderTextColor={COLORS.textMuted}
-            value={row.key}
-            onChangeText={(t) =>
-              setVarRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, key: t } : r)))
-            }
-          />
-          <TextInput
-            style={[styles.input, { flex: 1.4 }]}
-            placeholder="Value"
-            placeholderTextColor={COLORS.textMuted}
-            value={row.value}
-            onChangeText={(t) =>
-              setVarRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, value: t } : r)))
-            }
-          />
+          <View style={{ flex: 1 }}>
+            <Input
+              placeholder={t('campaigns.new.fieldPlaceholder')}
+              value={row.key}
+              onChangeText={(text) =>
+                setVarRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, key: text } : r)))
+              }
+              size="sm"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+          <View style={{ flex: 1.4 }}>
+            <Input
+              placeholder={t('campaigns.new.valuePlaceholder')}
+              value={row.value}
+              onChangeText={(text) =>
+                setVarRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, value: text } : r)))
+              }
+              size="sm"
+            />
+          </View>
           <TouchableOpacity
             style={styles.kvRemove}
             onPress={() =>
@@ -597,15 +651,15 @@ export default function NewCampaignScreen() {
         </View>
       ))}
       <TouchableOpacity onPress={() => setVarRows((rs) => [...rs, newRow()])}>
-        <Text style={styles.linkTxt}>+ Add another field</Text>
+        <Text style={styles.linkTxt}>{t('campaigns.new.addAnother')}</Text>
       </TouchableOpacity>
 
       <View style={[styles.footer, { marginTop: 24 }]}>
         <TouchableOpacity onPress={goNext}>
-          <Text style={styles.linkTxt}>Skip</Text>
+          <Text style={styles.linkTxt}>{t('common.skip')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.primaryBtn} onPress={goNext}>
-          <Text style={styles.primaryBtnText}>Next — review</Text>
+          <Text style={styles.primaryBtnText}>{t('campaigns.new.nextReview')}</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -616,7 +670,7 @@ export default function NewCampaignScreen() {
   const formatAllowedWindow = (w: AllowedWindow): string => {
     const days =
       w.days.length === 7
-        ? 'Every day'
+        ? t('campaigns.new.everyDay')
         : w.days.length === 0
           ? '—'
           : w.days.join(', ');
@@ -632,10 +686,10 @@ export default function NewCampaignScreen() {
     const vars = buildVarsObject();
     const scheduleLabel =
       draft.scheduleMode === 'now'
-        ? 'Now'
+        ? t('campaigns.new.summaryWhenNow')
         : draft.scheduledAt
           ? new Date(draft.scheduledAt).toLocaleString()
-          : 'Later (no time picked)';
+          : t('campaigns.new.summaryWhenLater');
 
     const launchDisabled =
       submitting ||
@@ -644,31 +698,36 @@ export default function NewCampaignScreen() {
       balanceAfter < 0 ||
       draft.selectedContactIds.length === 0;
 
+    const namesShort = selected.slice(0, 3).join(', ');
+    const whoValue = selected.length > 3
+      ? t('campaigns.new.summaryWhoSelectedMore', { count: selected.length, names: namesShort, extra: selected.length - 3 })
+      : t('campaigns.new.summaryWhoSelected', { count: selected.length, names: namesShort });
+
     return (
       <ScrollView contentContainerStyle={styles.contentPad}>
-        {renderHeader('Ready to call?')}
+        {renderHeader(t('campaigns.new.reviewTitle'))}
 
-        <SummaryRow label="AI assistant" value={agentName || '—'} />
-        <SummaryRow label="When" value={scheduleLabel} />
-        <SummaryRow label="Call window" value={formatAllowedWindow(draft.allowedWindow)} />
+        <SummaryRow label={t('campaigns.new.summaryAssistant')} value={agentName || '—'} />
+        <SummaryRow label={t('campaigns.new.summaryWhen')} value={scheduleLabel} />
+        <SummaryRow label={t('campaigns.new.summaryWindow')} value={formatAllowedWindow(draft.allowedWindow)} />
         <SummaryRow
-          label="Who"
-          value={`${selected.length} contact${selected.length === 1 ? '' : 's'}: ${selected.slice(0, 3).join(', ')}${selected.length > 3 ? `, +${selected.length - 3} more` : ''}`}
+          label={t('campaigns.new.summaryWho')}
+          value={whoValue}
         />
         {Object.keys(vars).length > 0 && (
           <SummaryRow
-            label="Shared details"
+            label={t('campaigns.new.summarySharedDetails')}
             value={Object.entries(vars).map(([k, v]) => `${k}: ${v}`).join('  •  ')}
           />
         )}
 
         <View style={styles.costCard}>
           <Text style={styles.costLine}>
-            {cost} call{cost === 1 ? '' : 's'} × 1 credit = <Text style={styles.costBig}>{cost}</Text> credit{cost === 1 ? '' : 's'}
+            {t('campaigns.new.callsTimes', { count: cost, cost })}
           </Text>
           <Text style={styles.costSub}>
-            Balance after: <Text style={styles.costBigSecondary}>{balanceAfter}</Text>
-            {balanceAfter < 0 ? '  •  Need more credits' : ''}
+            {t('campaigns.new.balanceAfter', { balance: balanceAfter })}
+            {balanceAfter < 0 ? t('campaigns.new.needMoreCreditsSuffix') : ''}
           </Text>
         </View>
 
@@ -692,7 +751,7 @@ export default function NewCampaignScreen() {
               }}
             >
               <Text style={styles.validateRetryText}>
-                {showRecreate ? 'Re-create' : 'Try again'}
+                {showRecreate ? t('campaigns.new.recreate') : t('campaigns.new.tryAgain')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -709,13 +768,13 @@ export default function NewCampaignScreen() {
             <ActivityIndicator color={COLORS.textOnInk} />
           ) : validating ? (
             <View style={{ alignItems: 'center' }}>
-              <Text style={styles.ctaTextHi}>Checking…</Text>
-              <Text style={styles.ctaTextEn}>Verifying assistant</Text>
+              <Text style={styles.ctaTextHi}>{t('campaigns.new.checking')}</Text>
+              <Text style={styles.ctaTextEn}>{t('campaigns.new.verifyingAgent')}</Text>
             </View>
           ) : (
             <View style={{ alignItems: 'center' }}>
-              <Text style={styles.ctaTextHi}>Launch karein</Text>
-              <Text style={styles.ctaTextEn}>Launch campaign</Text>
+              <Text style={styles.ctaTextHi}>{t('campaigns.new.launchBilingualHi')}</Text>
+              <Text style={styles.ctaTextEn}>{t('campaigns.new.launchBilingualEn')}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -728,8 +787,8 @@ export default function NewCampaignScreen() {
           activeOpacity={0.85}
         >
           <View style={{ alignItems: 'center' }}>
-            <Text style={styles.secondaryCtaTextHi}>Badlein</Text>
-            <Text style={styles.secondaryCtaTextEn}>Edit</Text>
+            <Text style={styles.secondaryCtaTextHi}>{t('campaigns.new.editHi')}</Text>
+            <Text style={styles.secondaryCtaTextEn}>{t('campaigns.new.editEn')}</Text>
           </View>
         </TouchableOpacity>
       </ScrollView>
@@ -750,7 +809,7 @@ export default function NewCampaignScreen() {
       <View style={[styles.container, styles.center]}>
         <Text style={styles.errorTxt}>{error}</Text>
         <TouchableOpacity style={styles.primaryBtn} onPress={bootstrap}>
-          <Text style={styles.primaryBtnText}>Retry</Text>
+          <Text style={styles.primaryBtnText}>{t('common.retry')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -852,7 +911,13 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '500', color: COLORS.text, marginTop: 4 },
   hint: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 14, lineHeight: 18 },
 
-  searchRow: { paddingHorizontal: 16, paddingBottom: 8 },
+  searchRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   searchInput: {
     backgroundColor: COLORS.surface,
     borderRadius: 10,
@@ -862,6 +927,78 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 15,
     color: COLORS.text,
+  },
+  // Pill-shaped search wrap with leading icon. Sits in the searchRow next
+  // to the "Manage" link.
+  searchInputWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.surface,
+    borderRadius: 999,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+    paddingHorizontal: 14,
+    height: 44,
+  },
+  searchIcon: { fontSize: 14 },
+  searchInputInner: {
+    flex: 1,
+    fontSize: 15,
+    color: COLORS.text,
+    paddingVertical: 0,
+  },
+  manageBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+  },
+  manageBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: TatvaColors.indigoContent,
+  },
+
+  // Strong empty hero shown when the user has zero saved contacts.
+  // Replaces the search input on this step so there's nothing to mistake
+  // for a "type a name to add a contact" entry field.
+  emptyHero: {
+    flex: 1,
+    margin: 16,
+    padding: 24,
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  emptyHeroTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+  emptyHeroBody: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  emptyHeroCta: {
+    backgroundColor: TatvaColors.brandPrimary,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 999,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+  },
+  emptyHeroCtaText: {
+    color: TatvaColors.brandContentInverse,
+    fontWeight: '600',
+    fontSize: 15,
   },
 
   contactCard: {

@@ -16,13 +16,23 @@ export interface DeviceContact {
 }
 
 type ContactsModule = {
-  requestPermissionsAsync: () => Promise<{ status: 'granted' | 'denied' | 'undetermined' }>;
-  getPermissionsAsync: () => Promise<{ status: 'granted' | 'denied' | 'undetermined' }>;
+  requestPermissionsAsync: () => Promise<ContactPermissionResponse>;
+  getPermissionsAsync: () => Promise<ContactPermissionResponse>;
   getContactsAsync: (opts?: any) => Promise<{ data: any[] }>;
   Fields: { Name: string; PhoneNumbers: string };
 };
 
+type ContactPermissionResponse = {
+  status?: 'granted' | 'denied' | 'undetermined';
+  granted?: boolean;
+  canAskAgain?: boolean;
+};
+
 let _mod: ContactsModule | null | undefined;
+
+function hasContactsPermission(permission: ContactPermissionResponse | null | undefined): boolean {
+  return permission?.granted === true || permission?.status === 'granted';
+}
 
 async function getModule(): Promise<ContactsModule | null> {
   if (_mod !== undefined) return _mod;
@@ -44,7 +54,8 @@ export type LoadResult =
   | { ok: false; reason: 'unavailable' | 'denied'; message: string };
 
 /**
- * Ask for permission, then read all phone-bearing device contacts.
+ * Read all phone-bearing device contacts, requesting permission only when
+ * Android/iOS says we do not already have it.
  * Normalises to { id, name, phone } and dedupes by phone within the device.
  */
 export async function loadDeviceContacts(): Promise<LoadResult> {
@@ -58,8 +69,12 @@ export async function loadDeviceContacts(): Promise<LoadResult> {
     };
   }
 
-  const perm = await mod.requestPermissionsAsync();
-  if (perm.status !== 'granted') {
+  const existingPermission = await mod.getPermissionsAsync();
+  const permission = hasContactsPermission(existingPermission)
+    ? existingPermission
+    : await mod.requestPermissionsAsync();
+
+  if (!hasContactsPermission(permission)) {
     return {
       ok: false,
       reason: 'denied',

@@ -1,32 +1,25 @@
 /**
- * /profile-setup — Single-step onboarding.
+ * /profile-setup — Single-step onboarding, Indus-style.
  *
- * Collects Name + Business name + Business description in ONE screen, saves
- * to /user/profile (with onboardingDone:true), and routes to /(tabs).
+ * Collects Name + Business name + Business description in ONE screen,
+ * saves to /user/profile (with onboardingDone:true), routes to /(tabs).
+ * Decoupled from agent creation: actual agent creation runs later, when
+ * the user taps "Create campaign" on the home screen.
  *
- * Decoupled from agent creation: the actual agent (POST /agents) is no
- * longer triggered here. It runs later, when the user taps "Create
- * campaign" on the home screen. The home screen handles the deferred
- * trigger; the agent-preview screen surfaces progress and routes back
- * into the campaign wizard once the agent is ready.
- *
- * Why language is dropped from the form: the description's transcribe
- * endpoint already returns a detected language, and on-the-fly typed-input
- * defaults to 'en'. The user-perceived language picker created confusion
- * (UI language vs. agent runtime language vs. transcription bias). Letting
- * the LLM/transcribe pipeline pick removes the choice without losing
- * accuracy.
- *
- * Returning users (already onboarded, want to compose another agent) hit
- * this screen via the new "Create another assistant" affordance — see
- * the chip variant. Their submission still routes back to /(tabs); agent
- * creation triggers from the campaign flow.
+ * Visual treatment (matches Indus's "What should we call you?"):
+ *  - Dark surface throughout, BrandMark hero up top.
+ *  - Display heading in Fraunces (Season substitute).
+ *  - Pill-shaped inputs across all three fields.
+ *  - Multiline business-description rendered as a tall pill-styled
+ *    Tatva Textarea (rounded-lg corners — full-pill on a tall textarea
+ *    looks awkward).
+ *  - Voice CTA: when active swaps to brand-primary surface for the
+ *    Indus signature "this is the moment".
  */
 
 import { useState, useEffect, useRef } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -36,20 +29,23 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AudioModule, useAudioRecorder, RecordingPresets } from 'expo-audio';
-// expo-file-system v18 (SDK 54+) split the API: the modular File/Directory
-// classes are at the top level, the legacy readAsStringAsync + EncodingType
-// live in /legacy. We need readAsStringAsync to base64-encode the M4A
-// recording before POSTing to /onboarding/transcribe — keep the legacy
-// import for now. (Migration to the File class is a future cleanup.)
+import { useTranslation } from 'react-i18next';
+import { CaretLeftIcon } from 'phosphor-react-native';
+// expo-file-system v18 split the API: modular File/Directory at top level,
+// legacy readAsStringAsync + EncodingType at /legacy. We need the legacy
+// path to base64-encode the M4A recording before POSTing to /onboarding/transcribe.
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAuthStore } from '../src/stores/authStore';
 import { api } from '../src/services/api';
-import { COLORS } from '../src/constants/api';
+import { TatvaColors, Radius, Spacing, Type, Weight } from '../src/constants/theme';
+import { AppText } from '../src/components/AppText';
+import { Input } from '../src/components/Input';
+import { Button } from '../src/components/Button';
+import { BrandMark } from '../src/components/BrandMark';
+import { TatvaIcon } from '../src/components/TatvaIcon';
 
-// Voice input — Sarvam Saaras ASR via POST /onboarding/transcribe.
-// Backend accepts {audio:base64, language, filename, mode}.
-const MAX_RECORDING_SECONDS = 60;        // hard cap so users don't run away
-const MIN_RECORDING_SECONDS = 1;         // anything shorter is almost surely empty
+const MAX_RECORDING_SECONDS = 60;
+const MIN_RECORDING_SECONDS = 1;
 
 interface TranscribeResponse {
   text: string;
@@ -67,6 +63,7 @@ function formatTime(seconds: number): string {
 
 export default function ProfileSetupScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
@@ -74,12 +71,9 @@ export default function ProfileSetupScreen() {
   const [name, setName] = useState(user?.name ?? '');
   const [businessName, setBusinessName] = useState(user?.businessName ?? '');
   const [businessDesc, setBusinessDesc] = useState(user?.businessDesc ?? '');
-  // Detected from the transcribe endpoint when the user records voice.
-  // Defaults to whatever's already on the user row, else 'en'.
   const [detectedLanguage, setDetectedLanguage] = useState<string>(user?.language ?? 'en');
   const [saving, setSaving] = useState(false);
 
-  // Voice input state.
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -105,17 +99,15 @@ export default function ProfileSetupScreen() {
     };
   }, [audioRecorder]);
 
-  // Top-left back chevron: log out + return to /(auth)/login. We don't pop
-  // the stack because the only thing behind us is OTP verify, which would
-  // be confusing (already-verified user landing on a 'Verify OTP' screen).
+  // Top-left back chevron: log out + return to /(auth)/login.
   const handleHeaderBack = () => {
     Alert.alert(
-      'Use a different number?',
-      "You'll need to log in again with the new number.",
+      t('profileSetup.useDifferentNumberTitle'),
+      t('profileSetup.useDifferentNumberBody'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Log out',
+          text: t('common.logOut'),
           style: 'destructive',
           onPress: () => {
             logout();
@@ -139,8 +131,8 @@ export default function ProfileSetupScreen() {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
       if (!perm.granted) {
         Alert.alert(
-          'Microphone access needed',
-          'We need microphone permission to record your business description. You can enable it in Settings.',
+          t('profileSetup.alerts.micTitle'),
+          t('profileSetup.alerts.micBody'),
         );
         return;
       }
@@ -163,8 +155,8 @@ export default function ProfileSetupScreen() {
     } catch (err: any) {
       console.warn('[profile-setup] startRecording failed:', err);
       Alert.alert(
-        'Could not start recording',
-        err?.message || 'Try again, or type your description.',
+        t('profileSetup.alerts.recordStartFailedTitle'),
+        err?.message || t('profileSetup.alerts.recordStartFailedBody'),
       );
       setIsRecording(false);
     }
@@ -186,17 +178,17 @@ export default function ProfileSetupScreen() {
       fileUri = audioRecorder.uri;
     } catch (err: any) {
       console.warn('[profile-setup] stop recording failed:', err);
-      Alert.alert('Recording failed', err?.message || 'Please try again.');
+      Alert.alert(t('profileSetup.alerts.recordFailedTitle'), err?.message || t('profileSetup.alerts.recordFailedBody'));
       return;
     }
 
     if (!fileUri) {
-      Alert.alert('Recording failed', 'No audio was captured. Please try again.');
+      Alert.alert(t('profileSetup.alerts.recordFailedTitle'), t('profileSetup.alerts.recordEmptyBody'));
       return;
     }
 
     if (elapsed < MIN_RECORDING_SECONDS) {
-      Alert.alert('Tap and hold to speak', 'That recording was too short. Try again — speak naturally for a few seconds.');
+      Alert.alert(t('profileSetup.alerts.tapHoldTitle'), t('profileSetup.alerts.tapHoldBody'));
       return;
     }
 
@@ -206,10 +198,6 @@ export default function ProfileSetupScreen() {
         encoding: FileSystem.EncodingType.Base64,
       });
 
-      // language: 'unknown' tells Saaras to auto-detect from the audio.
-      // The detected language is captured into local state and saved to
-      // /user/profile alongside the description so subsequent agent
-      // creation uses it without an explicit picker on this screen.
       const result = await api.post<TranscribeResponse>('/onboarding/transcribe', {
         audio: audioBase64,
         filename: 'business-description.m4a',
@@ -219,8 +207,8 @@ export default function ProfileSetupScreen() {
       const text = (result.text || '').trim();
       if (!text) {
         Alert.alert(
-          "Couldn't hear you clearly",
-          'Try again — speak a bit louder or move somewhere quieter.',
+          t('profileSetup.alerts.couldntHearTitle'),
+          t('profileSetup.alerts.couldntHearBody'),
         );
         return;
       }
@@ -232,31 +220,23 @@ export default function ProfileSetupScreen() {
     } catch (err: any) {
       const msg = err?.message || 'Could not transcribe the recording.';
       Alert.alert(
-        'Transcription failed',
-        msg + '\n\nYou can also type your description below.',
+        t('profileSetup.alerts.transcribeFailedTitle'),
+        msg + t('profileSetup.alerts.transcribeFailedSuffix'),
       );
     } finally {
       setIsTranscribing(false);
     }
   };
 
-  /**
-   * Save profile to /user/profile and route to /(tabs).
-   *
-   * NB: We do NOT call POST /agents here. Agent creation is deferred to
-   * the "Create campaign" tap on the home screen. Setting onboardingDone:
-   * true here lets the user reach the home tab on subsequent app opens
-   * even though no agent exists yet.
-   */
   const handleSubmit = async () => {
     if (!name.trim()) {
-      Alert.alert('Required', 'Please enter your name.');
+      Alert.alert(t('common.errors.required'), t('profileSetup.alerts.nameRequiredBody'));
       return;
     }
     if (!businessDesc.trim() || businessDesc.trim().length < 20) {
       Alert.alert(
-        'Tell us a bit more',
-        'Please describe your business in at least a few sentences so we can build a good assistant for you later.',
+        t('profileSetup.alerts.tellMoreTitle'),
+        t('profileSetup.alerts.tellMoreBody'),
       );
       return;
     }
@@ -275,8 +255,6 @@ export default function ProfileSetupScreen() {
         onboardingDone: true,
       });
 
-      // Reflect into the auth store so downstream screens (home empty
-      // state, deferred agent trigger) see the saved fields immediately.
       setUser({
         name: name.trim(),
         businessName: businessName.trim() || undefined,
@@ -287,7 +265,7 @@ export default function ProfileSetupScreen() {
 
       router.replace('/(tabs)');
     } catch (err: any) {
-      Alert.alert('Could not save', err?.message || 'Please try again.');
+      Alert.alert(t('common.errors.couldNotSave'), err?.message || t('common.tryAgain'));
     } finally {
       setSaving(false);
     }
@@ -299,200 +277,187 @@ export default function ProfileSetupScreen() {
         onPress={handleHeaderBack}
         style={styles.headerBack}
         hitSlop={12}
-        accessibilityLabel="Back"
+        accessibilityLabel={t('common.back')}
       >
-        <Text style={styles.headerBackText}>←</Text>
+        <CaretLeftIcon size={24} color={TatvaColors.contentPrimary} weight="regular" />
       </TouchableOpacity>
 
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>Apne baare mein bataiye</Text>
-        <Text style={styles.title}>Tell us about you and your business</Text>
-        <Text style={styles.subtitle}>
-          Bas ek baar. Aage badhein home screen par.
-        </Text>
+      <View style={styles.hero}>
+        <BrandMark size={96} variant="gradient" />
       </View>
 
+      <AppText variant="display-md" style={styles.title}>
+        What should we call you?
+      </AppText>
+      <AppText variant="body-md" tone="tertiary" style={styles.subtitle}>
+        Enter your name to personalise your experience
+      </AppText>
+
       <View style={styles.form}>
-        <View style={styles.field}>
-          <Text style={styles.label}>Your name *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Avi Solanki"
-            placeholderTextColor={COLORS.textMuted}
-            value={name}
-            onChangeText={setName}
-            autoFocus
-          />
-        </View>
+        <Input
+          placeholder="Your name"
+          value={name}
+          onChangeText={setName}
+          autoFocus
+          size="lg"
+        />
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Business name (optional)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Solanki Saree House"
-            placeholderTextColor={COLORS.textMuted}
-            value={businessName}
-            onChangeText={setBusinessName}
-          />
-        </View>
+        <Input
+          placeholder="Business name (optional)"
+          value={businessName}
+          onChangeText={setBusinessName}
+          size="lg"
+        />
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Business description *</Text>
-          <Text style={styles.hint}>
-            Aap kya kaam karte hain? — what does your business do?
-          </Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Main ek tuition center chalata hoon, Class 8-10, Hindi medium…"
-            placeholderTextColor={COLORS.textMuted}
-            value={businessDesc}
-            onChangeText={setBusinessDesc}
-            multiline
-            numberOfLines={6}
-            textAlignVertical="top"
-          />
+        {/* ── Business description: multiline + voice ─────────── */}
+        <View style={styles.descBlock}>
+          <AppText variant="label-md" tone="secondary" style={styles.descLabel}>
+            {t('profileSetup.businessDescLabel')}
+          </AppText>
+          <AppText variant="body-xs" tone="tertiary" style={styles.descHint}>
+            {t('profileSetup.businessDescHint')}
+          </AppText>
 
+          <View style={styles.textareaShell}>
+            <TextInput
+              style={styles.textarea}
+              placeholder={t('profileSetup.businessDescPlaceholder')}
+              placeholderTextColor={TatvaColors.contentQuaternary}
+              value={businessDesc}
+              onChangeText={setBusinessDesc}
+              multiline
+              numberOfLines={6}
+              textAlignVertical="top"
+            />
+          </View>
+
+          {/* Voice CTA — active state flips to brand-primary surface. */}
           <TouchableOpacity
             style={[styles.recordButton, isRecording && styles.recordButtonActive]}
             onPress={handleToggleRecording}
             disabled={isTranscribing}
-            activeOpacity={isTranscribing ? 1 : 0.6}
+            activeOpacity={isTranscribing ? 1 : 0.8}
           >
             {isTranscribing ? (
               <>
-                <ActivityIndicator size="small" color={COLORS.primary} />
-                <Text style={styles.recordButtonText}>Transcribing…</Text>
+                <ActivityIndicator size="small" color={TatvaColors.brandPrimary} />
+                <AppText variant="body-sm" tone="indigo">
+                  {t('common.transcribing')}
+                </AppText>
+              </>
+            ) : isRecording ? (
+              <>
+                <TatvaIcon
+                  name="stop"
+                  size={18}
+                  color={TatvaColors.contentInverse}
+                  strokeWidth={2.4}
+                />
+                <AppText
+                  variant="body-sm"
+                  style={{ color: TatvaColors.contentInverse, fontWeight: Weight.semibold }}
+                >
+                  {t('profileSetup.recordingActive', { time: formatTime(recordingSeconds) })}
+                </AppText>
               </>
             ) : (
               <>
-                <Text style={styles.recordButtonIcon}>{isRecording ? '⏹' : '🎙'}</Text>
-                <Text style={[styles.recordButtonText, isRecording && styles.recordButtonTextActive]}>
-                  {isRecording
-                    ? `Recording ${formatTime(recordingSeconds)} — tap to stop`
-                    : 'Or speak it instead — bolke bataiye'}
-                </Text>
+                <TatvaIcon name="microphone" size={16} color={TatvaColors.contentPrimary} />
+                <AppText variant="body-sm" style={{ fontWeight: Weight.semibold }}>
+                  {t('profileSetup.recordingHint')}
+                </AppText>
               </>
             )}
           </TouchableOpacity>
-          <Text style={styles.recordHelper}>
-            Voice is sent to Sarvam for transcription. Audio is not stored.
-          </Text>
+
+          <AppText
+            variant="body-xs"
+            tone="tertiary"
+            align="center"
+            style={styles.recordHelper}
+          >
+            {t('profileSetup.voiceFootnote')}
+          </AppText>
         </View>
 
-        <TouchableOpacity
-          style={[styles.button, saving && styles.buttonDisabled]}
+        <Button
           onPress={handleSubmit}
-          disabled={saving}
+          isLoading={saving}
+          width="full"
+          size="lg"
         >
-          {saving ? (
-            <ActivityIndicator color={COLORS.textOnInk} />
-          ) : (
-            <Text style={styles.buttonText}>Continue</Text>
-          )}
-        </TouchableOpacity>
-
-        <Text style={styles.footnote}>
-          Aapka assistant abhi nahi banta — pehli campaign banaate waqt taiyaar
-          hoga. (Your assistant is built when you create your first campaign.)
-        </Text>
+          {t('profileSetup.continue')}
+        </Button>
       </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  scrollContent: { padding: 24, paddingTop: 60, paddingBottom: 32 },
+  container: { flex: 1, backgroundColor: TatvaColors.surfacePrimary },
+  scrollContent: {
+    paddingHorizontal: Spacing['12'],
+    paddingTop: Spacing['16'],
+    paddingBottom: Spacing['16'],
+  },
 
   headerBack: {
     alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    marginBottom: 14,
-  },
-  headerBackText: { fontSize: 16, fontWeight: '500', color: COLORS.textSecondary },
-
-  header: { marginBottom: 22 },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: COLORS.textMuted,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '500',
-    color: COLORS.text,
-    marginTop: 4,
-    marginBottom: 14,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    lineHeight: 13 * 1.55,
+    paddingVertical: Spacing['3'],
+    paddingHorizontal: Spacing['1'],
+    marginBottom: Spacing['6'],
   },
 
-  form: { gap: 14 },
-  field: { gap: 6 },
-  label: { fontSize: 13, fontWeight: '500', color: COLORS.text },
-  hint: { fontSize: 12, color: COLORS.textMuted, lineHeight: 12 * 1.55 },
-
-  input: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 8,
-    borderWidth: 0.5,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: COLORS.text,
-    lineHeight: 14 * 1.55,
+  // ─── Hero ────────────────────────────────────────────────────
+  hero: {
+    alignItems: 'center',
+    marginBottom: Spacing['10'],
   },
-  textArea: { minHeight: 110, paddingTop: 12 },
 
-  // Voice-record button — outlined, matches the secondary CTA pattern.
+  title: { marginBottom: Spacing['2'] },
+  subtitle: { marginBottom: Spacing['10'] },
+
+  // ─── Form ────────────────────────────────────────────────────
+  form: { gap: Spacing['6'] },
+
+  descBlock: { gap: Spacing['3'], marginTop: Spacing['2'] },
+  descLabel: { fontWeight: Weight.medium },
+  descHint: {},
+
+  textareaShell: {
+    backgroundColor: TatvaColors.surfaceSecondary,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: TatvaColors.borderSecondary,
+    paddingHorizontal: Spacing['8'],
+    paddingVertical: Spacing['6'],
+    minHeight: 132,
+    marginTop: Spacing['1'],
+  },
+  textarea: {
+    flex: 1,
+    minHeight: 110,
+    color: TatvaColors.contentPrimary,
+    ...Type.bodyMd,
+  },
+
+  // ─── Voice button ───────────────────────────────────────────
   recordButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 0.5,
-    borderColor: COLORS.borderSoft,
-    backgroundColor: COLORS.surface,
-    marginTop: 4,
+    gap: Spacing['3'],
+    paddingVertical: Spacing['5'],
+    paddingHorizontal: Spacing['6'],
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: TatvaColors.borderSecondary,
+    backgroundColor: TatvaColors.surfaceSecondary,
+    marginTop: Spacing['2'],
   },
   recordButtonActive: {
-    borderColor: COLORS.danger,
-    backgroundColor: COLORS.statusDeclinedBg,
+    backgroundColor: TatvaColors.brandPrimary,
+    borderColor: TatvaColors.brandPrimary,
   },
-  recordButtonIcon: { fontSize: 16 },
-  recordButtonText: { fontSize: 12, fontWeight: '500', color: COLORS.text },
-  recordButtonTextActive: { color: COLORS.danger },
-  recordHelper: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginTop: 2,
-  },
-
-  // Filled-ink primary CTA — canonical pattern.
-  button: {
-    backgroundColor: COLORS.ink,
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  buttonDisabled: { opacity: 0.7 },
-  buttonText: { color: COLORS.textOnInk, fontSize: 14, fontWeight: '500' },
-
-  footnote: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    lineHeight: 11 * 1.55,
-    marginTop: 8,
-  },
+  recordHelper: { marginTop: Spacing['1'] },
 });

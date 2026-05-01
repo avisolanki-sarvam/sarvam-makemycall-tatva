@@ -94,7 +94,7 @@ export default function SettingsScreen() {
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.profileName} numberOfLines={1}>
-              {user?.name || 'User'}
+              {user?.name || t('settings.user')}
             </Text>
             <Text style={styles.profilePhone}>+91 {user?.phone}</Text>
           </View>
@@ -131,12 +131,12 @@ export default function SettingsScreen() {
 
         {/* ─── Account ──────────────────────────────────────── */}
         <SectionLabel>{t('settings.sections.account')}</SectionLabel>
-        <Group>
-          <Row Icon={WalletIcon}    label={t('settings.rows.creditHistory')} />
+        {/* <Group>
+          <Row Icon={WalletIcon}    label={t('settings.rows.creditHistory')} /> 
           <Row Icon={BellIcon}      label={t('settings.rows.notifications')} />
           <Row Icon={QuestionIcon}  label={t('settings.rows.helpSupport')} />
           <Row Icon={InfoIcon}      label={t('settings.rows.about')}          isLast />
-        </Group>
+        </Group> */}
 
         {/* ─── Log out ──────────────────────────────────────── */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
