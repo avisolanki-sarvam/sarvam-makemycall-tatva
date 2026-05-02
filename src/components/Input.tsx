@@ -41,7 +41,8 @@ import {
   EyeSlashIcon,
   IconProps,
 } from 'phosphor-react-native';
-import { TatvaColors, Radius, Type, Weight, Spacing } from '../constants/theme';
+import { Radius, Type, Weight, Spacing } from '../constants/theme';
+import { useAppTheme } from '../theme/AppThemeProvider';
 import { AppText } from './AppText';
 
 export type InputSize = 'sm' | 'md' | 'lg';
@@ -97,13 +98,14 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   const [focused, setFocused] = useState(false);
   const [pwdHidden, setPwdHidden] = useState(true);
   const innerRef = useRef<TextInput>(null);
+  const { colors } = useAppTheme();
 
   // The visual border colour tracks state: error > focus > rest.
   const borderColor = useMemo(() => {
-    if (error) return TatvaColors.dangerBorder;
-    if (focused) return TatvaColors.borderTertiary;
-    return TatvaColors.borderSecondary;
-  }, [error, focused]);
+    if (error) return colors.dangerBorder;
+    if (focused) return colors.borderTertiary;
+    return colors.borderSecondary;
+  }, [colors, error, focused]);
 
   const helper = error || helperText;
   const helperTone = error ? 'danger' : 'tertiary';
@@ -120,11 +122,16 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
         onPress={() => innerRef.current?.focus()}
         style={[
           styles.shell,
-          { borderColor, height: SIZE_HEIGHT[size], paddingHorizontal: SIZE_PADDING[size] },
+          {
+            backgroundColor: colors.surfaceSecondary,
+            borderColor,
+            height: SIZE_HEIGHT[size],
+            paddingHorizontal: SIZE_PADDING[size],
+          },
         ]}
       >
         {LeadingIcon ? (
-          <LeadingIcon size={16} color={TatvaColors.contentTertiary} weight="regular" />
+          <LeadingIcon size={16} color={colors.contentTertiary} weight="regular" />
         ) : null}
 
         {prefix ? (
@@ -145,9 +152,9 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           }}
           style={[
             styles.input,
-            { fontSize: SIZE_FONT[size] },
+            { color: colors.contentPrimary, fontSize: SIZE_FONT[size] },
           ]}
-          placeholderTextColor={TatvaColors.contentQuaternary}
+          placeholderTextColor={colors.contentQuaternary}
           value={value}
           secureTextEntry={isPassword ? pwdHidden : secureTextEntry}
           onFocus={(e) => {
@@ -171,14 +178,14 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             accessibilityLabel={pwdHidden ? 'Show password' : 'Hide password'}
           >
             {pwdHidden ? (
-              <EyeIcon size={16} color={TatvaColors.contentTertiary} weight="regular" />
+              <EyeIcon size={16} color={colors.contentTertiary} weight="regular" />
             ) : (
-              <EyeSlashIcon size={16} color={TatvaColors.contentTertiary} weight="regular" />
+              <EyeSlashIcon size={16} color={colors.contentTertiary} weight="regular" />
             )}
           </TouchableOpacity>
         ) : showClear && value ? (
           <TouchableOpacity onPress={onClear} hitSlop={8} accessibilityLabel="Clear">
-            <XCircleIcon size={16} color={TatvaColors.contentTertiary} weight="fill" />
+            <XCircleIcon size={16} color={colors.contentTertiary} weight="fill" />
           </TouchableOpacity>
         ) : null}
       </Pressable>
@@ -237,14 +244,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing['4'],
-    backgroundColor: TatvaColors.surfaceSecondary,
     // Indus default: pill silhouette across every input.
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
   },
   input: {
     flex: 1,
-    color: TatvaColors.contentPrimary,
     paddingVertical: 0,
     fontWeight: Weight.regular,
     // Tatva uses a slightly tighter line on inputs vs. body. Match it.

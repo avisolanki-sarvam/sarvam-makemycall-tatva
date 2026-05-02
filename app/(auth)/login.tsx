@@ -20,7 +20,7 @@
  * to /(auth)/verify-otp on success.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -33,16 +33,20 @@ import {
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ArrowRightIcon } from 'phosphor-react-native';
-import { TatvaColors, Spacing, Weight } from '../../src/constants/theme';
+import { AuthAccentColors, Spacing, Weight } from '../../src/constants/theme';
+import type { TatvaColorTokens } from '../../src/constants/theme';
 import { api } from '../../src/services/api';
 import { AppText } from '../../src/components/AppText';
 import { Input } from '../../src/components/Input';
 import { BrandMark } from '../../src/components/BrandMark';
 import { GradientButton } from '../../src/components/GradientButton';
+import { useAppTheme } from '../../src/theme/AppThemeProvider';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -97,7 +101,11 @@ export default function LoginScreen() {
       >
         {/* ─── Hero ─────────────────────────────────────────────── */}
         <View style={styles.hero}>
-          <BrandMark size={160} variant="gradient" />
+          <BrandMark
+            size={160}
+            variant="gradient"
+            gradientBottomColor={AuthAccentColors.logoBottom}
+          />
         </View>
 
         {/* ─── Welcome ───────────────────────────────────────────── */}
@@ -124,11 +132,12 @@ export default function LoginScreen() {
             size={56}
             onPress={handleSendOtp}
             disabled={!phoneReady || loading}
+            gradientColors={[AuthAccentColors.buttonStart, AuthAccentColors.buttonEnd]}
             accessibilityLabel={t('auth.login.sendOtp')}
           >
             <ArrowRightIcon
               size={20}
-              color={TatvaColors.contentPrimary}
+              color={AuthAccentColors.icon}
               weight="bold"
             />
           </GradientButton>
@@ -161,8 +170,8 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: TatvaColors.surfacePrimary },
+const makeStyles = (colors: TatvaColorTokens) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.surfacePrimary },
   content: {
     flexGrow: 1,
     paddingHorizontal: Spacing['12'],
@@ -184,7 +193,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['10'],
   },
   welcomeTitle: {
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
   },
 
   // ─── Phone row ───────────────────────────────────────────────

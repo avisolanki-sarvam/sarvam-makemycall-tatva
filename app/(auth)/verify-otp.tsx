@@ -20,7 +20,7 @@
  *  - Resend countdown styled as Tatva indigo link below.
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   TextInput,
@@ -37,10 +37,12 @@ import { useTranslation } from 'react-i18next';
 import { CaretLeftIcon, ArrowRightIcon } from 'phosphor-react-native';
 import { api } from '../../src/services/api';
 import { useAuthStore } from '../../src/stores/authStore';
-import { TatvaColors, Radius, Spacing, Type, Weight } from '../../src/constants/theme';
+import { AuthAccentColors, Radius, Spacing, Type, Weight } from '../../src/constants/theme';
+import type { TatvaColorTokens } from '../../src/constants/theme';
 import { AppText } from '../../src/components/AppText';
 import { BrandMark } from '../../src/components/BrandMark';
 import { GradientButton } from '../../src/components/GradientButton';
+import { useAppTheme } from '../../src/theme/AppThemeProvider';
 
 const OTP_LENGTH = 6;
 
@@ -49,6 +51,8 @@ export default function VerifyOtpScreen() {
   const phone = Array.isArray(params.phone) ? params.phone[0] : params.phone;
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const setAuth = useAuthStore((s) => s.setAuth);
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
@@ -164,7 +168,11 @@ export default function VerifyOtpScreen() {
       >
         {/* ─── Hero ─────────────────────────────────────────────── */}
         <View style={styles.hero}>
-          <BrandMark size={140} variant="gradient" />
+          <BrandMark
+            size={140}
+            variant="gradient"
+            gradientBottomColor={AuthAccentColors.logoBottom}
+          />
         </View>
 
         {/* ─── Heading + back ────────────────────────────────────── */}
@@ -172,7 +180,7 @@ export default function VerifyOtpScreen() {
           <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
             <CaretLeftIcon
               size={24}
-              color={TatvaColors.contentPrimary}
+              color={colors.contentPrimary}
               weight="regular"
             />
           </TouchableOpacity>
@@ -216,7 +224,7 @@ export default function VerifyOtpScreen() {
                     <AppText
                       variant="body-lg"
                       style={{
-                        color: TatvaColors.contentPrimary,
+                        color: colors.contentPrimary,
                         fontWeight: Weight.semibold,
                         opacity: isFilled ? 1 : isCurrent ? 0.9 : 0.4,
                       }}
@@ -236,11 +244,12 @@ export default function VerifyOtpScreen() {
             size={56}
             onPress={() => handleVerify()}
             disabled={!otpReady || loading}
+            gradientColors={[AuthAccentColors.buttonStart, AuthAccentColors.buttonEnd]}
             accessibilityLabel={t('auth.otp.verify')}
           >
             <ArrowRightIcon
               size={20}
-              color={TatvaColors.contentPrimary}
+              color={AuthAccentColors.icon}
               weight="bold"
             />
           </GradientButton>
@@ -266,8 +275,8 @@ function formatTimer(s: number): string {
   return `00:${String(s).padStart(2, '0')}`;
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: TatvaColors.surfacePrimary },
+const makeStyles = (colors: TatvaColorTokens) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.surfacePrimary },
   content: {
     flexGrow: 1,
     paddingHorizontal: Spacing['12'],
@@ -295,7 +304,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing['1'],
   },
   title: {
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
   },
   subtitle: {
     marginBottom: Spacing['10'],
@@ -321,10 +330,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: 56,
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     paddingHorizontal: Spacing['3'],
   },
   otpCell: {
@@ -336,7 +345,7 @@ const styles = StyleSheet.create({
   otpDivider: {
     width: StyleSheet.hairlineWidth,
     height: 24,
-    backgroundColor: TatvaColors.borderSecondary,
+    backgroundColor: colors.borderSecondary,
   },
 
   resendBtn: {

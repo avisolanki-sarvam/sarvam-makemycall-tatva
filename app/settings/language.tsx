@@ -9,7 +9,7 @@
  * fallback option for users who explicitly want it.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -27,7 +27,9 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../src/services/api';
 import { useAuthStore } from '../../src/stores/authStore';
 import { setAppLanguage, SupportedLang } from '../../src/i18n';
-import { TatvaColors, Radius, Type } from '../../src/constants/theme';
+import { Radius, Type } from '../../src/constants/theme';
+import type { TatvaColorTokens } from '../../src/constants/theme';
+import { useAppTheme } from '../../src/theme/AppThemeProvider';
 
 // Order: Hinglish first (recommended default for most users), then the
 // other Indian languages by speaker count, English last.
@@ -47,9 +49,16 @@ const LANGUAGES: { code: string; native: string }[] = [
   { code: 'en', native: 'English' },
 ];
 
+function useLanguageThemeStyles() {
+  const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme.colors), [theme.colors]);
+  return { ...theme, styles };
+}
+
 export default function LanguageScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, scheme, styles } = useLanguageThemeStyles();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const [selected, setSelected] = useState(user?.language || 'hi');
@@ -80,7 +89,10 @@ export default function LanguageScreen() {
 
   return (
     <SafeAreaView style={styles.shell} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={TatvaColors.surfaceSecondary} />
+      <StatusBar
+        barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.surfaceSecondary}
+      />
 
       {/* ─── Header ──────────────────────────────────────────── */}
       <View style={styles.header}>
@@ -111,7 +123,7 @@ export default function LanguageScreen() {
                 </View>
                 {isActive && (
                   <View style={styles.tickWrap}>
-                    <CheckIcon size={14} color={TatvaColors.indigoContent} weight="bold" />
+                    <CheckIcon size={14} color={colors.indigoContent} weight="bold" />
                   </View>
                 )}
               </TouchableOpacity>
@@ -126,7 +138,7 @@ export default function LanguageScreen() {
           disabled={saving}
         >
           {saving ? (
-            <ActivityIndicator color={TatvaColors.contentInverse} size="small" />
+            <ActivityIndicator color={colors.contentInverse} size="small" />
           ) : (
             <Text style={styles.saveText}>{t('common.save')}</Text>
           )}
@@ -136,37 +148,37 @@ export default function LanguageScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: TatvaColors.surfacePrimary },
+const makeStyles = (colors: TatvaColorTokens) => StyleSheet.create({
+  shell: { flex: 1, backgroundColor: colors.surfacePrimary },
 
   header: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 14,
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: TatvaColors.borderSecondary,
+    borderBottomColor: colors.borderSecondary,
   },
   backBtn: { alignSelf: 'flex-start', marginBottom: 8 },
-  backTxt: { fontSize: 14, color: TatvaColors.contentSecondary, fontWeight: '500' },
+  backTxt: { fontSize: 14, color: colors.contentSecondary, fontWeight: '500' },
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
   },
   subtitle: {
     ...Type.bodySm,
-    color: TatvaColors.contentTertiary,
+    color: colors.contentTertiary,
     marginTop: 2,
   },
 
   scrollContent: { padding: 16, paddingBottom: 24 },
 
   group: {
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     overflow: 'hidden',
     marginBottom: 16,
   },
@@ -179,36 +191,36 @@ const styles = StyleSheet.create({
   },
   rowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: TatvaColors.borderPrimary,
+    borderBottomColor: colors.borderPrimary,
   },
   rowLabel: {
     fontSize: 15,
     fontWeight: '600',
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
   },
   rowNative: {
     fontSize: 13,
-    color: TatvaColors.contentTertiary,
+    color: colors.contentTertiary,
     marginTop: 2,
   },
   tickWrap: {
     width: 24,
     height: 24,
     borderRadius: Radius.full,
-    backgroundColor: TatvaColors.indigoBackground,
+    backgroundColor: colors.indigoBackground,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   saveBtn: {
-    backgroundColor: TatvaColors.brandPrimary,
+    backgroundColor: colors.brandPrimary,
     borderRadius: Radius.md,
     paddingVertical: 13,
     alignItems: 'center',
   },
   saveBtnDisabled: { opacity: 0.5 },
   saveText: {
-    color: TatvaColors.contentInverse,
+    color: colors.contentInverse,
     fontSize: 15,
     fontWeight: '700',
   },

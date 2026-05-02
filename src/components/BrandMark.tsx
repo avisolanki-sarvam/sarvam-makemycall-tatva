@@ -6,10 +6,10 @@
  * with a configurable linear gradient so the same component can play
  * three roles:
  *
- *   - `saaras` — original Saaras V3 colours (red → light blue).
- *   - `gradient` — saffron → indigo, the Indus brand-mark gradient
+ *   - `saaras` — Sarvam red adapted to MakeMyCall's ink/cream palette.
+ *   - `gradient` — saffron → ink, the MakeMyCall brand-mark gradient
  *     used on splash + welcome + verify-otp + the home top bar.
- *   - `indigo` — solid brand-primary (sidebar, dense chrome).
+ *   - `indigo` — compatibility alias for solid brand-primary.
  *   - `mono` — single fill (override via `color`).
  *
  * The original SVG's filter (drop-shadow + inner highlight) is omitted
@@ -21,7 +21,7 @@
  */
 
 import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
-import { TatvaColors } from '../constants/theme';
+import { useAppTheme } from '../theme/AppThemeProvider';
 
 export type BrandMarkVariant = 'saaras' | 'gradient' | 'indigo' | 'mono';
 
@@ -30,6 +30,8 @@ export interface BrandMarkProps {
   variant?: BrandMarkVariant;
   /** Override fill colour for `mono` variant. Defaults to contentPrimary. */
   color?: string;
+  /** Override the bottom stop for `gradient` / `saaras` variants. */
+  gradientBottomColor?: string;
 }
 
 // The Saaras V3 path — copied verbatim from
@@ -41,27 +43,30 @@ export function BrandMark({
   size = 96,
   variant = 'gradient',
   color,
+  gradientBottomColor,
 }: BrandMarkProps) {
+  const { colors } = useAppTheme();
+
   // Resolve the fill: gradient variants reference url(#gradId), solid
   // variants pass the colour directly to the path's fill.
   const isGradient = variant === 'saaras' || variant === 'gradient';
   const monoFill =
     variant === 'mono'
-      ? color || TatvaColors.contentPrimary
+      ? color || colors.contentPrimary
       : variant === 'indigo'
-      ? TatvaColors.brandPrimary
+      ? colors.brandPrimary
       : undefined;
 
-  // Stop colours per variant. `saaras` matches the source SVG exactly
-  // (see paint0_linear_6671_15955 in model-07.svg). `gradient` is our
-  // brand expression — saffron at top, indigo at bottom.
+  // Stop colours per variant. `saaras` keeps the Sarvam red start but adapts
+  // the bottom stop to the MakeMyCall palette. `gradient` is our brand
+  // expression — saffron at top, ink at bottom.
   const [stopTop, stopBottom] = (() => {
     switch (variant) {
       case 'saaras':
-        return ['#B81514', '#D2DFF9'];
+        return ['#B81514', gradientBottomColor || colors.brandPrimary];
       case 'gradient':
       default:
-        return [TatvaColors.saffronStart, TatvaColors.brandPrimary];
+        return [colors.saffronStart, gradientBottomColor || colors.brandPrimary];
     }
   })();
 

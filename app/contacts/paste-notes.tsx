@@ -34,8 +34,9 @@ import {
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../src/services/api';
-import { COLORS } from '../../src/constants/api';
+import type { LegacyColorTokens } from '../../src/constants/theme';
 import { useContactStore } from '../../src/stores/contactStore';
+import { useAppTheme } from '../../src/theme/AppThemeProvider';
 
 type ParsedRow = {
   name: string | null;
@@ -72,9 +73,16 @@ type EditableRow = {
   task: string;
 };
 
+function usePasteNotesThemeStyles() {
+  const { legacyColors: COLORS } = useAppTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return { COLORS, styles };
+}
+
 export default function PasteNotesScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { COLORS, styles } = usePasteNotesThemeStyles();
   // Note: contact-store refresh after bulk happens via
   // `useContactStore.getState().setContacts(...)` directly in the submit
   // handler below — no hook subscription needed here. (The previous version
@@ -371,7 +379,7 @@ function intentKey(intent: string): string {
   }
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: LegacyColorTokens) => StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   content: { padding: 24, paddingTop: 60, paddingBottom: 48 },
 

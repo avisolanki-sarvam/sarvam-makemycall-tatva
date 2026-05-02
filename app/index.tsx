@@ -27,13 +27,15 @@
  *   logged in    → /(tabs)
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../src/stores/authStore';
-import { TatvaColors, Spacing } from '../src/constants/theme';
+import { Spacing } from '../src/constants/theme';
+import type { TatvaColorTokens } from '../src/constants/theme';
 import { BrandMark } from '../src/components/BrandMark';
 import { AppText } from '../src/components/AppText';
+import { useAppTheme } from '../src/theme/AppThemeProvider';
 
 // Min splash hold — long enough to feel the bloom + a beat of float.
 // Tuned by hand on the device; under ~1.0s the animation reads as a
@@ -45,6 +47,8 @@ const FADE_OUT_MS = 220;
 
 export default function Index() {
   const router = useRouter();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const isHydrating = useAuthStore((s) => s.isHydrating);
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
 
@@ -177,10 +181,10 @@ export default function Index() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: TatvaColorTokens) => StyleSheet.create({
   shell: {
     flex: 1,
-    backgroundColor: TatvaColors.surfacePrimary,
+    backgroundColor: colors.surfacePrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -21,7 +21,7 @@
  * that's the most common entry pattern for our target persona.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -37,7 +37,8 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../../src/services/api';
-import { COLORS } from '../../../src/constants/api';
+import type { LegacyColorTokens } from '../../../src/constants/theme';
+import { useAppTheme } from '../../../src/theme/AppThemeProvider';
 
 interface TestCallResponse {
   success: boolean;
@@ -46,9 +47,16 @@ interface TestCallResponse {
   message: string;
 }
 
+function useTestCallThemeStyles() {
+  const { legacyColors: COLORS } = useAppTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return { COLORS, styles };
+}
+
 export default function TestCallScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { COLORS, styles } = useTestCallThemeStyles();
   const { id: agentId } = useLocalSearchParams<{ id: string }>();
 
   const [name, setName] = useState('');
@@ -173,7 +181,7 @@ export default function TestCallScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: LegacyColorTokens) => StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   content: { padding: 20, paddingBottom: 60 },
 

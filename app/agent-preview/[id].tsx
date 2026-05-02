@@ -46,8 +46,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../src/services/api';
 import { useAuthStore } from '../../src/stores/authStore';
-import { COLORS } from '../../src/constants/api';
+import type { LegacyColorTokens } from '../../src/constants/theme';
 import { TatvaIcon } from '../../src/components/TatvaIcon';
+import { useAppTheme } from '../../src/theme/AppThemeProvider';
 
 type PossibleOutcome = { key: string; label: string };
 type ExtraField     = { field: string; reason: string; required?: boolean };
@@ -131,9 +132,16 @@ function rowStatesForStage(
   });
 }
 
+function useAgentPreviewThemeStyles() {
+  const { legacyColors: COLORS } = useAppTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return { COLORS, styles };
+}
+
 export default function AgentPreviewScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { COLORS, styles } = useAgentPreviewThemeStyles();
   const { id, next } = useLocalSearchParams<{ id: string; next?: string }>();
   const setUser = useAuthStore((s) => s.setUser);
 
@@ -501,6 +509,7 @@ function TonalityPicker({
   onLocalToneChange: (tone: string) => void;
 }) {
   const { t } = useTranslation();
+  const { styles } = useAgentPreviewThemeStyles();
   const businessDesc = useAuthStore((s) => s.user?.businessDesc);
   const [saving, setSaving] = useState<string | null>(null); // tone being saved
   const [error, setError] = useState<string | null>(null);
@@ -569,6 +578,7 @@ function TonalityPicker({
 // ─────────────────────────────────────────────────────────────────────────
 function VoicePickerPlaceholder() {
   const { t } = useTranslation();
+  const { styles } = useAgentPreviewThemeStyles();
   return (
     <View style={[styles.summaryCard, { opacity: 0.6 }]}>
       <View style={styles.voiceHeader}>
@@ -594,6 +604,7 @@ function StageItem({
   /** Last row in the list — drops the trailing connector line. */
   isLast?: boolean;
 }) {
+  const { COLORS, styles } = useAgentPreviewThemeStyles();
   // Connector colour: filled (ink) when this row is done — meaning the
   // gap between this row and the next is also "complete". Otherwise a
   // muted hairline so the line still reads as a pathway, just not yet
@@ -653,7 +664,7 @@ function StageItem({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: LegacyColorTokens) => StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   centerContent: { justifyContent: 'center', alignItems: 'center', padding: 24 },
   // Subtle "Loading…" label beneath the spinner during the first fetch.
@@ -930,11 +941,9 @@ const styles = StyleSheet.create({
   },
   primaryCtaEn: {
     color: COLORS.textOnInk,
-    fontSize: 11,
-    fontWeight: '400',
-    opacity: 0.7,
+    fontSize: 13,
+    fontWeight: '600',
     textAlign: 'center',
-    marginTop: 3,
   },
 
   secondaryCta: {

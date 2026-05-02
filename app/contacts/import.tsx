@@ -69,9 +69,10 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useTranslation } from 'react-i18next';
 import { CaretLeftIcon, CheckIcon, UsersIcon } from 'phosphor-react-native';
 import { api, readEnvelope } from '../../src/services/api';
-import { COLORS } from '../../src/constants/api';
+import type { LegacyColorTokens } from '../../src/constants/theme';
 import { loadDeviceContacts, type DeviceContact } from '../../src/services/contactImport';
 import { TatvaIcon, type TatvaIconName } from '../../src/components/TatvaIcon';
+import { useAppTheme } from '../../src/theme/AppThemeProvider';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -198,9 +199,22 @@ const BANNER_STAGE_KEYS: Record<BannerStage, { title: string; sub: string }> = {
   },
 };
 
+function useContactImportThemeStyles() {
+  const { legacyColors: COLORS } = useAppTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return { COLORS, styles };
+}
+
+function useAgentBannerThemeStyles() {
+  const { legacyColors: COLORS } = useAppTheme();
+  const bannerStyles = useMemo(() => makeBannerStyles(COLORS), [COLORS]);
+  return { COLORS, bannerStyles };
+}
+
 function AgentCreationBanner({ agentId }: { agentId: string }) {
   const router = useRouter();
   const { t } = useTranslation();
+  const { COLORS, bannerStyles } = useAgentBannerThemeStyles();
   const [agent, setAgent] = useState<AgentLite | null>(null);
   const [timedOut, setTimedOut] = useState(false);
   // showReadyConfirmation lingers for READY_CONFIRMATION_MS once we observe
@@ -363,7 +377,7 @@ function AgentCreationBanner({ agentId }: { agentId: string }) {
   );
 }
 
-const bannerStyles = StyleSheet.create({
+const makeBannerStyles = (COLORS: LegacyColorTokens) => StyleSheet.create({
   // Thin horizontal strip. Sits flush above the tab row — no outer borders /
   // shadows, just a 0.5px hairline at the bottom.
   bar: {
@@ -424,6 +438,7 @@ const bannerStyles = StyleSheet.create({
 export default function ContactImportScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { COLORS, styles } = useContactImportThemeStyles();
   // Both query params are optional now:
   //
   //   - agentId — when present, the screen offers BOTH "Save contacts" and
@@ -1473,6 +1488,7 @@ function ReviewView(props: {
 }) {
   const router = useRouter();
   const { t } = useTranslation();
+  const { COLORS, styles } = useContactImportThemeStyles();
   const {
     rows,
     defaultVars,
@@ -1727,6 +1743,7 @@ function ReviewRow({
   onDelete: (idx: number) => void;
 }) {
   const { t } = useTranslation();
+  const { COLORS, styles } = useContactImportThemeStyles();
   // Always-on inline editing — no expand/collapse. Reasoning:
   //   1. The previous tap-to-expand pattern hid the phone field whenever
   //      it was missing, which is the exact moment the user needs to see
@@ -1810,6 +1827,7 @@ function ModeTab({
   onPress: () => void;
   disabled?: boolean;
 }) {
+  const { COLORS, styles } = useContactImportThemeStyles();
   const fg = active ? COLORS.textOnInk : COLORS.textSecondary;
   return (
     <TouchableOpacity
@@ -1835,6 +1853,7 @@ function PrimaryButton({
   disabled?: boolean;
   loading?: boolean;
 }) {
+  const { COLORS, styles } = useContactImportThemeStyles();
   return (
     <TouchableOpacity
       style={[styles.cta, disabled && styles.ctaDisabled]}
@@ -1862,6 +1881,8 @@ function FilledButton({
   disabled?: boolean;
   flex?: boolean;
 }) {
+  const { styles } = useContactImportThemeStyles();
+
   return (
     <TouchableOpacity
       style={[styles.filledBtn, flex && { flex: 1 }, disabled && styles.ctaDisabled]}
@@ -1885,6 +1906,8 @@ function OutlinedButton({
   disabled?: boolean;
   flex?: boolean;
 }) {
+  const { styles } = useContactImportThemeStyles();
+
   return (
     <TouchableOpacity
       style={[styles.outlinedBtn, flex && { flex: 1 }, disabled && styles.ctaDisabled]}
@@ -1927,7 +1950,7 @@ function confirm(
 // ─────────────────────────────────────────────────────────────────────────────
 // Styles
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: LegacyColorTokens) => StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   content: { padding: 20, paddingTop: 56, paddingBottom: 60 },
 

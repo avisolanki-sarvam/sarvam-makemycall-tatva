@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,9 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { COLORS } from '../../../../src/constants/api';
+import type { LegacyColorTokens } from '../../../../src/constants/theme';
 import { api } from '../../../../src/services/api';
+import { useAppTheme } from '../../../../src/theme/AppThemeProvider';
 
 interface CallDetail {
   id: string;
@@ -27,11 +28,18 @@ interface CallDetail {
   calledAt: string | null;
 }
 
+function useCallDetailThemeStyles() {
+  const { legacyColors: COLORS } = useAppTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return { COLORS, styles };
+}
+
 export default function CallDetailScreen() {
   const { callId } = useLocalSearchParams<{ callId: string }>();
   const id = Array.isArray(callId) ? callId[0] : callId;
   const router = useRouter();
   const { t } = useTranslation();
+  const { COLORS, styles } = useCallDetailThemeStyles();
 
   const [call, setCall] = useState<CallDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -120,6 +128,8 @@ export default function CallDetailScreen() {
 }
 
 function Meta({ label, value }: { label: string; value: string }) {
+  const { styles } = useCallDetailThemeStyles();
+
   return (
     <View style={styles.meta}>
       <Text style={styles.metaLabel}>{label}</Text>
@@ -128,7 +138,7 @@ function Meta({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: LegacyColorTokens) => StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   content: { padding: 16, paddingTop: 56, paddingBottom: 60 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },

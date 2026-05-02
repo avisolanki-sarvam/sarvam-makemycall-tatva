@@ -8,11 +8,9 @@
  * Tailwind/CSS-variable mechanism directly, so we reimplement the same
  * names as JS values.
  *
- * **This app defaults to DARK** to match the Indus aesthetic — that's
- * the cinematic onboarding flow, the "What's on your mind?" home, and
- * the chat surfaces. All token getters resolve to dark values; a
- * future light-mode pass would expose a paired token map and a
- * `useTheme()` hook reading useColorScheme().
+ * Runtime theme selection lives in `AppThemeProvider`. The compatibility
+ * exports below intentionally resolve to dark so any unmigrated call sites
+ * keep their previous rendering.
  *
  * Season is loaded as `Fraunces` (free, near-identical editorial
  * serif) via `@expo-google-fonts/fraunces`. Matter falls back to the
@@ -24,84 +22,211 @@
 
 import { Platform } from 'react-native';
 
-// ─── Color tokens (DARK) ─────────────────────────────────────────────────
+// ─── Color tokens ─────────────────────────────────────────────────────────
 //
-// Each object groups the related tokens (background + content + border).
-// Component code should pull from THESE — never from raw hex strings.
-//
-// Values come from the Tatva theming docs (`.dark` token table) plus
-// the Indus signature additions (saturated-indigo brand-primary,
-// brand-secondary for the gradient action buttons).
+// Tatva web switches these semantic tokens through CSS variables. React
+// Native cannot consume that mechanism directly, so we keep paired JS maps
+// with the same token intent. Both maps mirror Tatva's published neutrals
+// and semantic status colors, while the main app brand path stays ink-led.
+// The old Indus blue-violet is reserved for auth/login screens only.
 
-export const TatvaColors = {
+export type ThemeScheme = 'light' | 'dark';
+export type ThemeMode = ThemeScheme | 'system';
+
+export interface TatvaColorTokens {
+  surfacePrimary: string;
+  surfaceSecondary: string;
+  surfaceTertiary: string;
+  backgroundPrimary: string;
+  backgroundSecondary: string;
+  backgroundTertiary: string;
+  contentPrimary: string;
+  contentSecondary: string;
+  contentTertiary: string;
+  contentQuaternary: string;
+  contentInverse: string;
+  borderPrimary: string;
+  borderSecondary: string;
+  borderTertiary: string;
+  brandPrimary: string;
+  brandPrimaryHover: string;
+  brandSurface: string;
+  brandContent: string;
+  brandContentInverse: string;
+  indigoBackground: string;
+  indigoContent: string;
+  indigoBorder: string;
+  indigoSurface: string;
+  indigoSurfaceHover: string;
+  saffronStart: string;
+  saffronEnd: string;
+  positiveBackground: string;
+  positiveContent: string;
+  positiveBorder: string;
+  warningBackground: string;
+  warningContent: string;
+  warningBorder: string;
+  dangerBackground: string;
+  dangerContent: string;
+  dangerBorder: string;
+  orangeBackground: string;
+  orangeContent: string;
+  greenBackground: string;
+  greenContent: string;
+  yellowBackground: string;
+  yellowContent: string;
+  pinkBackground: string;
+  pinkContent: string;
+  redBackground: string;
+  redContent: string;
+}
+
+export const TatvaDarkColors = {
   // Surfaces — what cards and the app shell sit on
-  surfacePrimary:   '#0e0e10',  // app shell, page background (true near-black)
-  surfaceSecondary: '#1a1a1d',  // cards, sheets, the elevated layer
-  surfaceTertiary:  '#242428',  // raised tile, input fill, pressed state
+  surfacePrimary:   '#141414',
+  surfaceSecondary: '#1e1e1e',
+  surfaceTertiary:  '#242424',
 
   // Backgrounds — controls (inputs, popovers) sit on these
-  backgroundPrimary:   '#1a1a1d',
-  backgroundSecondary: '#242428',
-  backgroundTertiary:  '#2e2e34',
+  backgroundPrimary:   '#242424',
+  backgroundSecondary: '#121212',
+  backgroundTertiary:  '#343434',
 
   // Content (text + icons)
-  contentPrimary:    '#f5f5f7',  // headings, primary copy
-  contentSecondary:  '#a8a8b3',  // body, descriptions
-  contentTertiary:   '#7a7a85',  // metadata, eyebrows, timestamps
-  contentQuaternary: '#5a5a65',  // placeholders, disabled
-  contentInverse:    '#0e0e10',  // text on light fills (rare in dark mode)
+  contentPrimary:    '#e4e4e4',
+  contentSecondary:  '#949494',
+  contentTertiary:   '#646464',
+  contentQuaternary: '#424242',
+  contentInverse:    '#141414',
 
-  // Borders — these have to read clearly on the dark surfaces.
-  borderPrimary:    '#2a2a30',  // dividers
-  borderSecondary:  '#343438',  // card outlines (default)
-  borderTertiary:   '#5a5a65',  // emphasized borders / focus
+  // Borders
+  borderPrimary:   '#343434',
+  borderSecondary: '#444444',
+  borderTertiary:  '#606060',
 
-  // Brand — Tatva's `brand-primary` token. Soft violet-indigo, the
-  // Indus signature. Used for primary CTAs, the action sphere on the
-  // chat input, focus halos, the medallion on the home tile.
-  brandPrimary:        '#818cf8',  // dark-mode brand-primary (Tatva spec)
-  brandPrimaryHover:   '#a5b4fc',
-  brandSurface:        '#1f1d3a',  // soft brand-tinted surface
-  brandContent:        '#c7d2fe',  // brand text on a dark surface
-  brandContentInverse: '#0e0e10',  // on a brand-primary fill
+  // MakeMyCall main app brand path: ink/cream contrast. The blue-violet
+  // Indus accent is intentionally scoped to auth screens via AuthAccentColors.
+  brandPrimary:        '#e8e8e8',
+  brandPrimaryHover:   '#d2d2d2',
+  brandSurface:        '#262626',
+  brandContent:        '#e8e8e8',
+  brandContentInverse: '#141414',
 
-  // Indigo accent — the saturated link / focus indigo.
-  // Distinct from brand-primary: this is the "link blue" of Indus.
-  indigoBackground: '#1a1f3a',  // soft tint
-  indigoContent:    '#a5b4fc',  // on dark surface
-  indigoBorder:     '#6366f1',
-  indigoSurface:    '#6366f1',  // saturated tile
-  indigoSurfaceHover: '#818cf8',
+  // Compatibility names only. Keep migrated app chrome neutral.
+  indigoBackground:    '#262626',
+  indigoContent:       '#949494',
+  indigoBorder:        '#444444',
+  indigoSurface:       '#e8e8e8',
+  indigoSurfaceHover:  '#d2d2d2',
 
-  // Saffron / sunrise — Indus's brand mark gradient top half.
   saffronStart: '#f4a25b',
   saffronEnd:   '#e07a3c',
 
-  // Semantic states (dark-tuned)
-  positiveBackground: '#0f2d18',
-  positiveContent:    '#86efac',
-  positiveBorder:     '#16a34a',
+  positiveBackground: '#0e231b',
+  positiveContent:    '#3fb981',
+  positiveBorder:     '#1a5234',
 
-  warningBackground: '#2d2410',
-  warningContent:    '#fcd34d',
-  warningBorder:     '#d97706',
+  warningBackground: '#271f00',
+  warningContent:    '#d29922',
+  warningBorder:     '#5e4606',
 
-  dangerBackground: '#2d1014',
-  dangerContent:    '#fca5a5',
-  dangerBorder:     '#ef4444',
+  dangerBackground: '#2a0c13',
+  dangerContent:    '#f85149',
+  dangerBorder:     '#6a1c26',
 
-  // Extra accents (chart / category chips)
-  orangeBackground: '#2d1f10',
-  orangeContent:    '#fb923c',
-  greenBackground:  '#0f2d18',
-  greenContent:     '#86efac',
-  yellowBackground: '#2d2410',
-  yellowContent:    '#fcd34d',
-  pinkBackground:   '#2d1024',
-  pinkContent:      '#f9a8d4',
-  redBackground:    '#2d1014',
-  redContent:       '#fca5a5',
+  orangeBackground: '#2d1a0a',
+  orangeContent:    '#ea8c48',
+  greenBackground:  '#0e281c',
+  greenContent:     '#3fb981',
+  yellowBackground: '#2a2000',
+  yellowContent:    '#d29922',
+  pinkBackground:   '#2e1024',
+  pinkContent:      '#f06aac',
+  redBackground:    '#300e14',
+  redContent:       '#f85149',
+} as const satisfies TatvaColorTokens;
+
+export const AuthAccentColors = {
+  logoTop: '#f4a25b',
+  logoBottom: '#a5b4fc',
+  buttonStart: '#6366f1',
+  buttonEnd: '#818cf8',
+  icon: '#f5f5f7',
 } as const;
+
+export const TatvaLightColors = {
+  // Tatva neutral light tokens.
+  surfacePrimary:   '#fafafa',
+  surfaceSecondary: '#ffffff',
+  surfaceTertiary:  '#f5f5f5',
+
+  backgroundPrimary:   '#ffffff',
+  backgroundSecondary: '#f5f5f5',
+  backgroundTertiary:  '#f0f0f0',
+
+  contentPrimary:    '#141414',
+  contentSecondary:  '#666666',
+  contentTertiary:   '#999999',
+  contentQuaternary: '#b3b3b3',
+  contentInverse:    '#ffffff',
+
+  borderPrimary:   '#f0f0f0',
+  borderSecondary: '#e6e6e6',
+  borderTertiary:  '#b3b3b3',
+
+  // MakeMyCall brand overrides on top of Tatva neutrals.
+  brandPrimary:        '#141414',
+  brandPrimaryHover:   '#3d3d3d',
+  brandSurface:        '#f0f0f0',
+  brandContent:        '#1a1a1a',
+  brandContentInverse: '#ffffff',
+
+  // Compatibility names kept for older call sites. These stay neutral/ink
+  // rather than Tatva's light-mode blue-indigo scale.
+  indigoBackground:    '#f0f0f0',
+  indigoContent:       '#1a1a1a',
+  indigoBorder:        '#dcdcdc',
+  indigoSurface:       '#141414',
+  indigoSurfaceHover:  '#3d3d3d',
+
+  saffronStart: '#f4a25b',
+  saffronEnd:   '#d76f32',
+
+  positiveBackground: '#f2f8eb',
+  positiveContent:    '#6ea335',
+  positiveBorder:     '#c8e1b4',
+
+  warningBackground: '#fff8e6',
+  warningContent:    '#a27224',
+  warningBorder:     '#ffe6af',
+
+  dangerBackground: '#fde7e2',
+  dangerContent:    '#b81514',
+  dangerBorder:     '#f8d1c6',
+
+  orangeBackground: '#feede6',
+  orangeContent:    '#e6651b',
+  greenBackground:  '#f2f8eb',
+  greenContent:     '#385418',
+  yellowBackground: '#fff8e6',
+  yellowContent:    '#c08827',
+  pinkBackground:   '#fceaf0',
+  pinkContent:      '#9d2055',
+  redBackground:    '#fde7e2',
+  redContent:       '#b81514',
+} as const satisfies TatvaColorTokens;
+
+export const TatvaColorSchemes = {
+  light: TatvaLightColors,
+  dark: TatvaDarkColors,
+} as const satisfies Record<ThemeScheme, TatvaColorTokens>;
+
+export function getTatvaColors(scheme: ThemeScheme): TatvaColorTokens {
+  return TatvaColorSchemes[scheme];
+}
+
+// Backward-compatible default: unmigrated screens remain dark.
+export const TatvaColors = TatvaDarkColors;
 
 // ─── Spacing scale ──────────────────────────────────────────────────────────
 //
@@ -258,51 +383,66 @@ export type CampaignStatus =
 export const StatusToTatva: Record<
   CampaignStatus,
   { bg: string; fg: string; label: string }
-> = {
-  scheduled:  { bg: TatvaColors.backgroundTertiary, fg: TatvaColors.contentSecondary, label: 'Scheduled' },
-  scheduling: { bg: TatvaColors.warningBackground,  fg: TatvaColors.warningContent,   label: 'Scheduling' },
-  active:     { bg: TatvaColors.indigoBackground,   fg: TatvaColors.indigoContent,    label: 'Calling' },
-  completed:  { bg: TatvaColors.positiveBackground, fg: TatvaColors.positiveContent,  label: 'Done' },
-  failed:     { bg: TatvaColors.dangerBackground,   fg: TatvaColors.dangerContent,    label: 'Failed' },
-  cancelled:  { bg: TatvaColors.backgroundTertiary, fg: TatvaColors.contentTertiary,  label: 'Cancelled' },
-};
+> = createStatusToTatva(TatvaColors);
+
+export function createStatusToTatva(colors: TatvaColorTokens): Record<
+  CampaignStatus,
+  { bg: string; fg: string; label: string }
+> {
+  return {
+    scheduled:  { bg: colors.backgroundTertiary, fg: colors.contentSecondary, label: 'Scheduled' },
+    scheduling: { bg: colors.warningBackground,  fg: colors.warningContent,   label: 'Scheduling' },
+    active:     { bg: colors.indigoBackground,   fg: colors.indigoContent,    label: 'Calling' },
+    completed:  { bg: colors.positiveBackground, fg: colors.positiveContent,  label: 'Done' },
+    failed:     { bg: colors.dangerBackground,   fg: colors.dangerContent,    label: 'Failed' },
+    cancelled:  { bg: colors.backgroundTertiary, fg: colors.contentTertiary,  label: 'Cancelled' },
+  };
+}
 
 // ─── Backwards-compatibility shim ───────────────────────────────────────────
 //
 // Keeps the prior `COLORS` import working for any screens we haven't
-// migrated yet. With dark-mode tokens above, any unmigrated screen
-// flips to dark automatically — that's intentional.
-export const COLORS: Record<string, string> = {
-  background:        TatvaColors.surfacePrimary,
-  surface:           TatvaColors.surfaceSecondary,
-  cream:             TatvaColors.surfacePrimary,
-  paper:             TatvaColors.surfaceSecondary,
+// migrated yet. The exported singleton uses dark tokens by design.
+export function createLegacyColors(colors: TatvaColorTokens): Record<string, string> {
+  return {
+    background:        colors.surfacePrimary,
+    surface:           colors.surfaceSecondary,
+    cream:             colors.surfacePrimary,
+    paper:             colors.surfaceSecondary,
 
-  ink:               TatvaColors.brandPrimary,
-  inkSoft:           TatvaColors.brandPrimaryHover,
-  primary:           TatvaColors.brandPrimary,
-  primaryDark:       TatvaColors.brandPrimaryHover,
-  primaryLight:      TatvaColors.indigoBackground,
-  secondary:         TatvaColors.brandPrimary,
+    ink:               colors.brandPrimary,
+    inkSoft:           colors.brandPrimaryHover,
+    primary:           colors.brandPrimary,
+    primaryDark:       colors.brandPrimaryHover,
+    primaryLight:      colors.indigoBackground,
+    secondary:         colors.brandPrimary,
 
-  text:              TatvaColors.contentPrimary,
-  textSecondary:     TatvaColors.contentSecondary,
-  textMuted:         TatvaColors.contentTertiary,
-  textOnInk:         TatvaColors.contentInverse,
+    text:              colors.contentPrimary,
+    textSecondary:     colors.contentSecondary,
+    textMuted:         colors.contentTertiary,
+    textOnInk:         colors.contentInverse,
 
-  border:            TatvaColors.borderSecondary,
-  borderSoft:        TatvaColors.borderPrimary,
+    border:            colors.borderSecondary,
+    borderSoft:        colors.borderPrimary,
 
-  success:           TatvaColors.positiveContent,
-  warning:           TatvaColors.warningContent,
-  danger:            TatvaColors.dangerContent,
+    success:           colors.positiveContent,
+    warning:           colors.warningContent,
+    danger:            colors.dangerContent,
 
-  statusCommittedBg: TatvaColors.positiveBackground,
-  statusCommittedFg: TatvaColors.positiveContent,
-  statusExtensionBg: TatvaColors.warningBackground,
-  statusExtensionFg: TatvaColors.warningContent,
-  statusDeclinedBg:  TatvaColors.dangerBackground,
-  statusDeclinedFg:  TatvaColors.dangerContent,
-  statusMuteBg:      TatvaColors.backgroundTertiary,
-  statusMuteFg:      TatvaColors.contentSecondary,
-};
+    statusCommittedBg: colors.positiveBackground,
+    // Tatva's light semantic positive text is intentionally soft. The app
+    // uses this in 10-12px chips/KPIs, so prefer the same Tatva green scale's
+    // higher-contrast content token.
+    statusCommittedFg: colors.greenContent,
+    statusExtensionBg: colors.warningBackground,
+    statusExtensionFg: colors.warningContent,
+    statusDeclinedBg:  colors.dangerBackground,
+    statusDeclinedFg:  colors.dangerContent,
+    statusMuteBg:      colors.backgroundTertiary,
+    statusMuteFg:      colors.contentSecondary,
+  };
+}
+
+export type LegacyColorTokens = ReturnType<typeof createLegacyColors>;
+
+export const COLORS: Record<string, string> = createLegacyColors(TatvaColors);

@@ -23,7 +23,7 @@
  * to avoid an extra dashboard round-trip.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -38,8 +38,10 @@ import { CaretLeftIcon, WalletIcon, CheckIcon } from 'phosphor-react-native';
 import RazorpayCheckout from 'react-native-razorpay';
 import { api } from '../src/services/api';
 import { useAuthStore } from '../src/stores/authStore';
-import { TatvaColors, Radius, Spacing, Shadow, Weight } from '../src/constants/theme';
+import { Radius, Spacing, Shadow, Weight } from '../src/constants/theme';
+import type { TatvaColorTokens } from '../src/constants/theme';
 import { AppText } from '../src/components/AppText';
+import { useAppTheme } from '../src/theme/AppThemeProvider';
 
 interface DashboardData {
   creditBalance: number;
@@ -115,8 +117,15 @@ const PACKS: CreditPack[] = [
   { credits: 10000, priceInr: 10000, badge: 'Best value' },
 ];
 
+function useCreditsThemeStyles() {
+  const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme.colors), [theme.colors]);
+  return { ...theme, styles };
+}
+
 export default function CreditsScreen() {
   const router = useRouter();
+  const { colors, styles } = useCreditsThemeStyles();
   const user = useAuthStore((s) => s.user);
   const [balance, setBalance] = useState<number | null>(null);
   const [purchasing, setPurchasing] = useState<number | null>(null);
@@ -169,7 +178,7 @@ export default function CreditsScreen() {
           // User store doesn't expose email; Razorpay accepts undefined.
           email: (user as unknown as { email?: string })?.email,
         },
-        theme: { color: TatvaColors.brandPrimary },
+        theme: { color: colors.brandPrimary },
       })) as RazorpaySuccess;
 
       const settled = await api.post<VerifyResponse>('/credits/topup/verify', {
@@ -199,7 +208,7 @@ export default function CreditsScreen() {
       {/* ─── Header ─────────────────────────────────────────────── */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-          <CaretLeftIcon size={22} color={TatvaColors.contentPrimary} weight="regular" />
+          <CaretLeftIcon size={22} color={colors.contentPrimary} weight="regular" />
         </TouchableOpacity>
         <AppText variant="heading-md">Credits</AppText>
         <View style={{ width: 22 }} />
@@ -213,11 +222,11 @@ export default function CreditsScreen() {
         {/* ─── Balance hero ───────────────────────────────────── */}
         <View style={styles.balanceHero}>
           <View style={styles.balanceLabelRow}>
-            <WalletIcon size={16} color={TatvaColors.brandContent} weight="regular" />
+            <WalletIcon size={16} color={colors.brandContent} weight="regular" />
             <AppText
               variant="label-sm"
               style={{
-                color: TatvaColors.brandContent,
+                color: colors.brandContent,
                 opacity: 0.85,
                 textTransform: 'uppercase',
               }}
@@ -226,11 +235,11 @@ export default function CreditsScreen() {
             </AppText>
           </View>
           {balance === null ? (
-            <ActivityIndicator color={TatvaColors.contentPrimary} />
+            <ActivityIndicator color={colors.contentPrimary} />
           ) : (
             <AppText
               variant="numeral-lg"
-              style={{ color: TatvaColors.contentPrimary, marginTop: Spacing['3'] }}
+              style={{ color: colors.contentPrimary, marginTop: Spacing['3'] }}
             >
               {balance.toLocaleString('en-IN')}
             </AppText>
@@ -268,23 +277,28 @@ export default function CreditsScreen() {
                   onPress={() => handleBuy(pack)}
                   disabled={isLoading}
                 >
-                  {pack.badge ? (
-                    <View style={styles.packBadge}>
-                      <AppText
-                        variant="label-sm"
-                        style={{
-                          color: TatvaColors.brandContent,
-                          fontSize: 10,
-                          letterSpacing: 0.4,
-                        }}
-                      >
-                        {pack.badge.toUpperCase()}
-                      </AppText>
-                    </View>
-                  ) : null}
+                  <View style={styles.packBadgeSlot}>
+                    {pack.badge ? (
+                      <View style={styles.packBadge}>
+                        <AppText
+                          variant="label-sm"
+                          style={{
+                            color: colors.brandContent,
+                            fontSize: 10,
+                            letterSpacing: 0.4,
+                          }}
+                        >
+                          {pack.badge.toUpperCase()}
+                        </AppText>
+                      </View>
+                    ) : null}
+                  </View>
                   <AppText
                     variant="numeral-md"
-                    style={{ color: TatvaColors.contentPrimary }}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.78}
+                    style={styles.packCredits}
                   >
                     {pack.credits.toLocaleString('en-IN')}
                   </AppText>
@@ -293,12 +307,12 @@ export default function CreditsScreen() {
                   </AppText>
                   <View style={styles.packPriceRow}>
                     {isLoading ? (
-                      <ActivityIndicator size="small" color={TatvaColors.brandPrimary} />
+                      <ActivityIndicator size="small" color={colors.brandPrimary} />
                     ) : (
                       <AppText
                         variant="body-md"
                         style={{
-                          color: TatvaColors.brandContent,
+                          color: colors.brandContent,
                           fontWeight: Weight.semibold,
                         }}
                       >
@@ -333,7 +347,7 @@ export default function CreditsScreen() {
                     <View style={styles.txnRowMain}>
                       <AppText
                         variant="body-sm"
-                        style={{ color: TatvaColors.contentPrimary }}
+                        style={{ color: colors.contentPrimary }}
                         numberOfLines={1}
                       >
                         {t.description}
@@ -346,8 +360,8 @@ export default function CreditsScreen() {
                       variant="numeral-md"
                       style={{
                         color: positive
-                          ? TatvaColors.positiveContent
-                          : TatvaColors.contentPrimary,
+                          ? colors.positiveContent
+                          : colors.contentPrimary,
                       }}
                     >
                       {sign}
@@ -361,7 +375,7 @@ export default function CreditsScreen() {
         </View>
 
         <View style={styles.disclaimerRow}>
-          <CheckIcon size={14} color={TatvaColors.positiveContent} weight="bold" />
+          <CheckIcon size={14} color={colors.positiveContent} weight="bold" />
           <AppText variant="body-xs" tone="tertiary">
             Secure checkout. Refunds within 24 hours.
           </AppText>
@@ -373,8 +387,8 @@ export default function CreditsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: TatvaColors.surfacePrimary },
+const makeStyles = (colors: TatvaColorTokens) => StyleSheet.create({
+  shell: { flex: 1, backgroundColor: colors.surfacePrimary },
 
   header: {
     flexDirection: 'row',
@@ -391,13 +405,13 @@ const styles = StyleSheet.create({
 
   // ─── Balance hero ───────────────────────────────────────────
   balanceHero: {
-    backgroundColor: TatvaColors.brandSurface,
+    backgroundColor: colors.brandSurface,
     borderRadius: Radius.lg,
     padding: Spacing['12'],
     marginTop: Spacing['4'],
     marginBottom: Spacing['10'],
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: TatvaColors.brandPrimary,
+    borderColor: colors.brandPrimary,
   },
   balanceLabelRow: {
     flexDirection: 'row',
@@ -417,26 +431,34 @@ const styles = StyleSheet.create({
   },
   packTile: {
     width: '48%',
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     padding: Spacing['8'],
     alignItems: 'flex-start',
     gap: Spacing['1'],
-    minHeight: 130,
+    minHeight: 142,
     ...Shadow.l1,
   },
+  packBadgeSlot: {
+    width: '100%',
+    minHeight: 22,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+    marginBottom: Spacing['2'],
+  },
   packBadge: {
-    position: 'absolute',
-    top: Spacing['4'],
-    right: Spacing['4'],
-    backgroundColor: TatvaColors.brandSurface,
+    backgroundColor: colors.brandSurface,
     paddingHorizontal: Spacing['3'],
     paddingVertical: Spacing['1'],
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: TatvaColors.brandPrimary,
+    borderColor: colors.brandPrimary,
+  },
+  packCredits: {
+    width: '100%',
+    color: colors.contentPrimary,
   },
   packPriceRow: {
     marginTop: Spacing['3'],
@@ -446,20 +468,20 @@ const styles = StyleSheet.create({
 
   // ─── Transactions empty ─────────────────────────────────────
   txnEmpty: {
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderStyle: 'dashed',
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     padding: Spacing['10'],
   },
 
   // ─── Transactions list ──────────────────────────────────────
   txnList: {
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     overflow: 'hidden',
     ...Shadow.l1,
   },
@@ -471,7 +493,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['8'],
     paddingVertical: Spacing['6'],
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: TatvaColors.borderPrimary,
+    borderBottomColor: colors.borderPrimary,
   },
   txnRowMain: {
     flex: 1,

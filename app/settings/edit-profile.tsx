@@ -15,7 +15,7 @@
  *                              industry?, language?}
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -32,7 +32,8 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../src/services/api';
 import { useAuthStore } from '../../src/stores/authStore';
-import { COLORS } from '../../src/constants/api';
+import type { LegacyColorTokens } from '../../src/constants/theme';
+import { useAppTheme } from '../../src/theme/AppThemeProvider';
 
 // Backend returns this flat (NOT wrapped in {user: ...}). See
 // api/controllers/user/profile.js.
@@ -60,9 +61,16 @@ interface UpdateProfileResponse {
   };
 }
 
+function useEditProfileThemeStyles() {
+  const { legacyColors: COLORS } = useAppTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return { COLORS, styles };
+}
+
 export default function EditProfileScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { COLORS, styles } = useEditProfileThemeStyles();
   const setUserInStore = useAuthStore((s) => s.setUser);
 
   const [loading, setLoading] = useState(true);
@@ -211,7 +219,7 @@ export default function EditProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: LegacyColorTokens) => StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center: { justifyContent: 'center', alignItems: 'center' },
   content: { padding: 20, paddingBottom: 60 },

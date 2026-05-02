@@ -29,7 +29,9 @@ import {
   ViewStyle,
 } from 'react-native';
 import { CaretRightIcon } from 'phosphor-react-native';
-import { TatvaColors, Radius, Spacing, Shadow } from '../constants/theme';
+import { Radius, Spacing, Shadow } from '../constants/theme';
+import type { TatvaColorTokens } from '../constants/theme';
+import { useAppTheme } from '../theme/AppThemeProvider';
 import { AppText } from './AppText';
 
 export type CardSize = 'sm' | 'md' | 'lg';
@@ -76,13 +78,20 @@ const VERTICAL_MEDIA_SIZE: Record<CardSize, number> = {
   lg: 0, // lg vertical is full-bleed, computed at render time
 };
 
-const BADGE_TONE: Record<NonNullable<CardBadge['tone']>, { bg: string; fg: string }> = {
-  default:  { bg: TatvaColors.backgroundTertiary,  fg: TatvaColors.contentSecondary },
-  positive: { bg: TatvaColors.positiveBackground,  fg: TatvaColors.positiveContent },
-  warning:  { bg: TatvaColors.warningBackground,   fg: TatvaColors.warningContent },
-  danger:   { bg: TatvaColors.dangerBackground,    fg: TatvaColors.dangerContent },
-  indigo:   { bg: TatvaColors.indigoBackground,    fg: TatvaColors.indigoContent },
-};
+function resolveBadgeTone(
+  tone: NonNullable<CardBadge['tone']>,
+  colors: TatvaColorTokens,
+): { bg: string; fg: string } {
+  switch (tone) {
+    case 'positive': return { bg: colors.positiveBackground, fg: colors.positiveContent };
+    case 'warning': return { bg: colors.warningBackground, fg: colors.warningContent };
+    case 'danger': return { bg: colors.dangerBackground, fg: colors.dangerContent };
+    case 'indigo': return { bg: colors.indigoBackground, fg: colors.indigoContent };
+    case 'default':
+    default:
+      return { bg: colors.backgroundTertiary, fg: colors.contentSecondary };
+  }
+}
 
 export function Card({
   heading,
@@ -100,9 +109,11 @@ export function Card({
   style,
   accessibilityLabel,
 }: CardProps) {
+  const { colors } = useAppTheme();
   const isPressable = clickable || !!onPress;
   // Show chevron by default on clickable horizontal cards, off otherwise.
   const renderChevron = showChevron ?? (isPressable && direction === 'horizontal');
+  const badgeTone = badge ? resolveBadgeTone(badge.tone || 'default', colors) : null;
 
   // Resolve the media slot. `image` wins over `src` (matches Tatva).
   const mediaNode = image ? (
@@ -130,7 +141,13 @@ export function Card({
     <View
       style={[
         styles.shell,
-        noBorder ? null : styles.bordered,
+        { backgroundColor: colors.surfaceSecondary },
+        noBorder
+          ? null
+          : {
+              borderColor: colors.borderSecondary,
+              borderWidth: StyleSheet.hairlineWidth,
+            },
         direction === 'horizontal' ? styles.horizontal : styles.vertical,
         style,
       ]}
@@ -159,12 +176,12 @@ export function Card({
             <View
               style={[
                 styles.badge,
-                { backgroundColor: BADGE_TONE[badge.tone || 'default'].bg },
+                { backgroundColor: badgeTone?.bg },
               ]}
             >
               <AppText
                 variant="label-sm"
-                style={{ color: BADGE_TONE[badge.tone || 'default'].fg }}
+                style={{ color: badgeTone?.fg }}
               >
                 {badge.label}
               </AppText>
@@ -174,7 +191,7 @@ export function Card({
           {renderChevron ? (
             <CaretRightIcon
               size={16}
-              color={TatvaColors.contentTertiary}
+              color={colors.contentTertiary}
               weight="regular"
             />
           ) : null}
@@ -201,14 +218,9 @@ export function Card({
 
 const styles = StyleSheet.create({
   shell: {
-    backgroundColor: TatvaColors.surfaceSecondary,
     borderRadius: Radius.lg,
     padding: Spacing['8'],
     ...Shadow.l1,
-  },
-  bordered: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: TatvaColors.borderSecondary,
   },
   horizontal: {
     flexDirection: 'row',

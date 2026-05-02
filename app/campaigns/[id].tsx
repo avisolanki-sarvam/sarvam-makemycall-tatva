@@ -22,8 +22,9 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { COLORS } from '../../src/constants/api';
+import type { LegacyColorTokens } from '../../src/constants/theme';
 import { api } from '../../src/services/api';
+import { useAppTheme } from '../../src/theme/AppThemeProvider';
 
 interface CampaignDetail {
   id: string;
@@ -79,11 +80,18 @@ function statusToKey(status: string | undefined | null): string {
   }
 }
 
+function useCampaignDetailThemeStyles() {
+  const { legacyColors: COLORS } = useAppTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return { COLORS, styles };
+}
+
 export default function CampaignDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const campaignId = Array.isArray(id) ? id[0] : id;
   const router = useRouter();
   const { t } = useTranslation();
+  const { COLORS, styles } = useCampaignDetailThemeStyles();
 
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
   const [calls, setCalls] = useState<CallRow[]>([]);
@@ -336,10 +344,19 @@ export default function CampaignDetailScreen() {
 }
 
 function Kpi({ label, value, bg, fg }: { label: string; value: number; bg: string; fg: string }) {
+  const { styles } = useCampaignDetailThemeStyles();
+
   return (
     <View style={[styles.kpi, { backgroundColor: bg }]}>
       <Text style={[styles.kpiNum, { color: fg }]}>{value}</Text>
-      <Text style={[styles.kpiLabel, { color: fg }]}>{label}</Text>
+      <Text
+        style={[styles.kpiLabel, { color: fg }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.78}
+      >
+        {label}
+      </Text>
     </View>
   );
 }
@@ -362,6 +379,7 @@ function CallingNowHeader({
   calls: CallRow[];
 }) {
   const { t } = useTranslation();
+  const { COLORS, styles } = useCampaignDetailThemeStyles();
   const total = campaign.totalContacts || campaign.kpis.total || 0;
 
   // A call row exists per attempted contact. Anything without a row is queued.
@@ -416,6 +434,8 @@ function CallingNowHeader({
 }
 
 function CnhStat({ label, value, fg }: { label: string; value: number; fg: string }) {
+  const { styles } = useCampaignDetailThemeStyles();
+
   return (
     <View style={styles.cnhStat}>
       <Text style={[styles.cnhStatNum, { color: fg }]}>{value}</Text>
@@ -426,6 +446,7 @@ function CnhStat({ label, value, fg }: { label: string; value: number; fg: strin
 
 function CnhRow({ call }: { call: CallRow }) {
   const { t } = useTranslation();
+  const { COLORS, styles } = useCampaignDetailThemeStyles();
   // Map row state to a dot colour + bilingual-leaning label.
   let dot = COLORS.textMuted;
   let label = t('campaigns.detail.outcome.queued');
@@ -458,6 +479,7 @@ function CnhRow({ call }: { call: CallRow }) {
 
 function OutcomeChip({ connectivity, outcome }: { connectivity: string | null; outcome: string | null }) {
   const { t } = useTranslation();
+  const { COLORS, styles } = useCampaignDetailThemeStyles();
   // BUG FIX (Apr 2026): the previous logic merged connectivity values
   // and conversation-outcome values into one map and let `outcome` win,
   // which meant a 110-second connected call whose AI conversation
@@ -529,7 +551,7 @@ function formatDuration(sec: number | null | undefined): string {
   return remMin > 0 ? `${hrs}h ${remMin}m` : `${hrs}h`;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: LegacyColorTokens) => StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   listContent: { paddingBottom: 24 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },

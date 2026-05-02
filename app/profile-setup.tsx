@@ -17,7 +17,7 @@
  *    Indus signature "this is the moment".
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   TextInput,
@@ -37,12 +37,14 @@ import { CaretLeftIcon } from 'phosphor-react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAuthStore } from '../src/stores/authStore';
 import { api } from '../src/services/api';
-import { TatvaColors, Radius, Spacing, Type, Weight } from '../src/constants/theme';
+import { Radius, Spacing, Type, Weight } from '../src/constants/theme';
+import type { TatvaColorTokens } from '../src/constants/theme';
 import { AppText } from '../src/components/AppText';
 import { Input } from '../src/components/Input';
 import { Button } from '../src/components/Button';
 import { BrandMark } from '../src/components/BrandMark';
 import { TatvaIcon } from '../src/components/TatvaIcon';
+import { useAppTheme } from '../src/theme/AppThemeProvider';
 
 const MAX_RECORDING_SECONDS = 60;
 const MIN_RECORDING_SECONDS = 1;
@@ -64,6 +66,8 @@ function formatTime(seconds: number): string {
 export default function ProfileSetupScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
@@ -279,7 +283,7 @@ export default function ProfileSetupScreen() {
         hitSlop={12}
         accessibilityLabel={t('common.back')}
       >
-        <CaretLeftIcon size={24} color={TatvaColors.contentPrimary} weight="regular" />
+        <CaretLeftIcon size={24} color={colors.contentPrimary} weight="regular" />
       </TouchableOpacity>
 
       <View style={styles.hero}>
@@ -322,7 +326,7 @@ export default function ProfileSetupScreen() {
             <TextInput
               style={styles.textarea}
               placeholder={t('profileSetup.businessDescPlaceholder')}
-              placeholderTextColor={TatvaColors.contentQuaternary}
+              placeholderTextColor={colors.contentQuaternary}
               value={businessDesc}
               onChangeText={setBusinessDesc}
               multiline
@@ -340,7 +344,7 @@ export default function ProfileSetupScreen() {
           >
             {isTranscribing ? (
               <>
-                <ActivityIndicator size="small" color={TatvaColors.brandPrimary} />
+                <ActivityIndicator size="small" color={colors.brandPrimary} />
                 <AppText variant="body-sm" tone="indigo">
                   {t('common.transcribing')}
                 </AppText>
@@ -350,19 +354,19 @@ export default function ProfileSetupScreen() {
                 <TatvaIcon
                   name="stop"
                   size={18}
-                  color={TatvaColors.contentInverse}
+                  color={colors.contentInverse}
                   strokeWidth={2.4}
                 />
                 <AppText
                   variant="body-sm"
-                  style={{ color: TatvaColors.contentInverse, fontWeight: Weight.semibold }}
+                  style={{ color: colors.contentInverse, fontWeight: Weight.semibold }}
                 >
                   {t('profileSetup.recordingActive', { time: formatTime(recordingSeconds) })}
                 </AppText>
               </>
             ) : (
               <>
-                <TatvaIcon name="microphone" size={16} color={TatvaColors.contentPrimary} />
+                <TatvaIcon name="microphone" size={16} color={colors.contentPrimary} />
                 <AppText variant="body-sm" style={{ fontWeight: Weight.semibold }}>
                   {t('profileSetup.recordingHint')}
                 </AppText>
@@ -393,8 +397,8 @@ export default function ProfileSetupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: TatvaColors.surfacePrimary },
+const makeStyles = (colors: TatvaColorTokens) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.surfacePrimary },
   scrollContent: {
     paddingHorizontal: Spacing['12'],
     paddingTop: Spacing['16'],
@@ -425,10 +429,10 @@ const styles = StyleSheet.create({
   descHint: {},
 
   textareaShell: {
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     paddingHorizontal: Spacing['8'],
     paddingVertical: Spacing['6'],
     minHeight: 132,
@@ -437,7 +441,7 @@ const styles = StyleSheet.create({
   textarea: {
     flex: 1,
     minHeight: 110,
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
     ...Type.bodyMd,
   },
 
@@ -451,13 +455,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['6'],
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: TatvaColors.borderSecondary,
-    backgroundColor: TatvaColors.surfaceSecondary,
+    borderColor: colors.borderSecondary,
+    backgroundColor: colors.surfaceSecondary,
     marginTop: Spacing['2'],
   },
   recordButtonActive: {
-    backgroundColor: TatvaColors.brandPrimary,
-    borderColor: TatvaColors.brandPrimary,
+    backgroundColor: colors.brandPrimary,
+    borderColor: colors.brandPrimary,
   },
   recordHelper: { marginTop: Spacing['1'] },
 });

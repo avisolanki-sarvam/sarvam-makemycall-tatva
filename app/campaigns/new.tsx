@@ -11,8 +11,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { COLORS } from '../../src/constants/api';
-import { TatvaColors } from '../../src/constants/theme';
+import type { LegacyColorTokens } from '../../src/constants/theme';
 // Tatva-aligned text-field primitive — mirrors the Tatva web `Input` API
 // (label, error, helperText, prefix, size 'sm'|'md'|'lg', leading icon).
 // Use this instead of raw RN <TextInput> so the wizard inherits the
@@ -25,6 +24,7 @@ import {
   type ScheduleMode,
   type AllowedWindow,
 } from '../../src/stores/campaignDraftStore';
+import { useAppTheme } from '../../src/theme/AppThemeProvider';
 
 // Wizard steps. Spec §4.15 (pick agent) is skipped for v1 because the user
 // only ever has one agent. Add it back when multi-agent UX lands.
@@ -103,9 +103,16 @@ const SCHEDULE_PRESETS = [
   () => tomorrowAt(19),
 ];
 
+function useNewCampaignThemeStyles() {
+  const { legacyColors: COLORS } = useAppTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return { COLORS, styles };
+}
+
 export default function NewCampaignScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { COLORS, styles } = useNewCampaignThemeStyles();
   // Optional ?agentId= picks WHICH agent this campaign belongs to. Used by
   // the home screen's per-agent "Create campaign" buttons in the multi-
   // agent UX. When absent (legacy entry from a tab/+ button), the bootstrap
@@ -838,6 +845,8 @@ function RadioRow({
   subtitle: string;
   onPress: () => void;
 }) {
+  const { styles } = useNewCampaignThemeStyles();
+
   return (
     <TouchableOpacity activeOpacity={0.8} onPress={onPress} style={[styles.radio, active && styles.radioActive]}>
       <View style={[styles.dot, active && styles.dotActive]}>{active && <View style={styles.dotInner} />}</View>
@@ -850,6 +859,8 @@ function RadioRow({
 }
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
+  const { styles } = useNewCampaignThemeStyles();
+
   return (
     <View style={styles.summaryRow}>
       <Text style={styles.summaryLabel}>{label}</Text>
@@ -870,7 +881,7 @@ function subtitleFor(c: Contact): string {
   return c.phone;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: LegacyColorTokens) => StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   contentPad: { padding: 16, paddingTop: 56, paddingBottom: 80 },
   center: { justifyContent: 'center', alignItems: 'center', padding: 24 },
@@ -896,17 +907,17 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 6,
     borderRadius: 3,
-    backgroundColor: TatvaColors.borderPrimary,
+    backgroundColor: COLORS.borderSoft,
     alignItems: 'flex-end',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   progressSegDone: {
-    backgroundColor: TatvaColors.brandPrimary,
+    backgroundColor: COLORS.primary,
     paddingRight: 3,
   },
   progressSegCurrent: {
-    backgroundColor: TatvaColors.indigoContent,
+    backgroundColor: COLORS.primary,
   },
   title: { fontSize: 22, fontWeight: '500', color: COLORS.text, marginTop: 4 },
   hint: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 14, lineHeight: 18 },
@@ -956,7 +967,7 @@ const styles = StyleSheet.create({
   manageBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: TatvaColors.indigoContent,
+    color: COLORS.primary,
   },
 
   // Strong empty hero shown when the user has zero saved contacts.
@@ -988,7 +999,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emptyHeroCta: {
-    backgroundColor: TatvaColors.brandPrimary,
+    backgroundColor: COLORS.primary,
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 999,
@@ -996,7 +1007,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyHeroCtaText: {
-    color: TatvaColors.brandContentInverse,
+    color: COLORS.textOnInk,
     fontWeight: '600',
     fontSize: 15,
   },

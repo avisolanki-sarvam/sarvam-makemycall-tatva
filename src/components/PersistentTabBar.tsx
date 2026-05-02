@@ -37,7 +37,7 @@ import {
   GearIcon,
   IconProps,
 } from 'phosphor-react-native';
-import { TatvaColors } from '../constants/theme';
+import { useAppTheme } from '../theme/AppThemeProvider';
 
 type TabKey = 'home' | 'contacts' | 'history' | 'settings';
 
@@ -88,6 +88,7 @@ export function shouldHideTabBarForSegments(segments: string[]): boolean {
 export default function PersistentTabBar() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors } = useAppTheme();
   // Cast: expo-router's segments type is a tagged union we don't need at
   // runtime; we treat it as plain strings.
   const segments = (useSegments() as unknown as string[]) || [];
@@ -127,13 +128,18 @@ export default function PersistentTabBar() {
     <View
       style={[
         styles.bar,
-        { paddingBottom: bottomPad, height: 60 + bottomPad },
+        {
+          backgroundColor: colors.surfaceSecondary,
+          borderTopColor: colors.borderSecondary,
+          paddingBottom: bottomPad,
+          height: 60 + bottomPad,
+        },
       ]}
       accessibilityRole="tablist"
     >
       {TABS.map((tab) => {
         const isActive = tab.key === active;
-        const tint = isActive ? TatvaColors.indigoContent : TatvaColors.contentTertiary;
+        const tint = isActive ? colors.indigoContent : colors.contentTertiary;
         const label = t(tab.i18nKey);
         return (
           <Pressable
@@ -192,8 +198,6 @@ export function tabBarHeight(bottomInset: number): number {
 const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
-    backgroundColor: TatvaColors.surfaceSecondary,
-    borderTopColor: TatvaColors.borderSecondary,
     borderTopWidth: 1,
     paddingTop: 6,
     ...Platform.select({

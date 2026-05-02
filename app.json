@@ -6,12 +6,12 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0e0e10"
+      "backgroundColor": "#141414"
     },
     "android": {
       "adaptiveIcon": {
@@ -30,7 +30,7 @@
       "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "pan",
       "navigationBar": {
-        "backgroundColor": "#0e0e10",
+        "backgroundColor": "#141414",
         "barStyle": "light-content"
       }
     },

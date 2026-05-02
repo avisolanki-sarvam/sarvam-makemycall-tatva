@@ -21,7 +21,7 @@
  * collapse. Multi-agent UX is now a first-class concept on the home tab.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -38,8 +38,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../src/stores/authStore';
 import { api } from '../../src/services/api';
-import { COLORS } from '../../src/constants/api';
+import type { LegacyColorTokens } from '../../src/constants/theme';
 import { TatvaIcon } from '../../src/components/TatvaIcon';
+import { useAppTheme } from '../../src/theme/AppThemeProvider';
 
 const MAX_RECORDING_SECONDS = 60;
 const MIN_RECORDING_SECONDS = 1;
@@ -98,9 +99,16 @@ function deriveContextChip(args: {
   return args.fallback;
 }
 
+function useCreateAgentThemeStyles() {
+  const { legacyColors: COLORS } = useAppTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return { COLORS, styles };
+}
+
 export default function CreateAgentScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { COLORS, styles } = useCreateAgentThemeStyles();
   const user = useAuthStore((s) => s.user);
 
   const [useCase, setUseCase] = useState('');
@@ -363,7 +371,7 @@ export default function CreateAgentScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: LegacyColorTokens) => StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scrollContent: { padding: 24, paddingTop: 60, paddingBottom: 32 },
 

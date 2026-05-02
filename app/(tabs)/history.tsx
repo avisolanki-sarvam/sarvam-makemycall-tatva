@@ -20,7 +20,7 @@
  *   4. Empty      — clean card with one CTA. No FAB on this screen.
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -47,13 +47,12 @@ import {
 } from 'phosphor-react-native';
 import { useTranslation } from 'react-i18next';
 import {
-  TatvaColors,
   Radius,
   Type,
-  StatusToTatva,
-  CampaignStatus,
 } from '../../src/constants/theme';
+import type { CampaignStatus, TatvaColorTokens } from '../../src/constants/theme';
 import { api } from '../../src/services/api';
+import { useAppTheme } from '../../src/theme/AppThemeProvider';
 
 interface CampaignRow {
   id: string;
@@ -65,9 +64,16 @@ interface CampaignRow {
   createdAt: string;
 }
 
+function useCampaignThemeStyles() {
+  const theme = useAppTheme();
+  const groupedStyles = useMemo(() => makeStyles(theme.colors), [theme.colors]);
+  return { ...theme, ...groupedStyles };
+}
+
 export default function CampaignsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, scheme, styles } = useCampaignThemeStyles();
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -112,7 +118,10 @@ export default function CampaignsScreen() {
 
   return (
     <SafeAreaView style={styles.shell} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={TatvaColors.surfaceSecondary} />
+      <StatusBar
+        barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.surfaceSecondary}
+      />
 
       {/* ─── Header ──────────────────────────────────────────── */}
       <View style={styles.header}>
@@ -128,18 +137,18 @@ export default function CampaignsScreen() {
           activeOpacity={0.6}
           accessibilityLabel={t('agentsTab.refresh')}
         >
-          <ArrowsClockwiseIcon size={20} color={TatvaColors.contentSecondary} weight="regular" />
+          <ArrowsClockwiseIcon size={20} color={colors.contentSecondary} weight="regular" />
         </TouchableOpacity>
       </View>
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={TatvaColors.indigoContent} size="large" />
+          <ActivityIndicator color={colors.indigoContent} size="large" />
         </View>
       ) : campaigns.length === 0 ? (
         <View style={styles.emptyWrap}>
           <View style={styles.emptyIcon}>
-            <PhoneSlashIcon size={20} color={TatvaColors.contentPrimary} weight="regular" />
+            <PhoneSlashIcon size={20} color={colors.contentPrimary} weight="regular" />
           </View>
           <Text style={styles.emptyTitle}>{t('campaigns.emptyTitle')}</Text>
           <Text style={styles.emptyText}>{t('campaigns.emptyBody')}</Text>
@@ -148,7 +157,7 @@ export default function CampaignsScreen() {
             onPress={() => router.push('/campaigns/new')}
             activeOpacity={0.9}
           >
-            <PlusIcon size={14} color={TatvaColors.contentInverse} weight="bold" />
+            <PlusIcon size={14} color={colors.contentInverse} weight="bold" />
             <Text style={styles.primaryBtnText}>{t('campaigns.newCampaign')}</Text>
           </TouchableOpacity>
         </View>
@@ -161,7 +170,7 @@ export default function CampaignsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={TatvaColors.indigoContent}
+              tintColor={colors.indigoContent}
             />
           }
           ListHeaderComponent={
@@ -189,20 +198,24 @@ function StatBar(props: {
   processing: number;
 }) {
   const { t } = useTranslation();
+  const { colors, statStyles } = useCampaignThemeStyles();
+
   return (
     <View style={statStyles.bar}>
-      <Stat value={props.total}      label={t('campaigns.stats.total')}      tone={TatvaColors.contentPrimary} />
+      <Stat value={props.total}      label={t('campaigns.stats.total')}      tone={colors.contentPrimary} />
       <Divider />
-      <Stat value={props.completed}  label={t('campaigns.stats.completed')}  tone={TatvaColors.positiveContent} />
+      <Stat value={props.completed}  label={t('campaigns.stats.completed')}  tone={colors.positiveContent} />
       <Divider />
-      <Stat value={props.pending}    label={t('campaigns.stats.pending')}    tone={TatvaColors.warningContent} />
+      <Stat value={props.pending}    label={t('campaigns.stats.pending')}    tone={colors.warningContent} />
       <Divider />
-      <Stat value={props.processing} label={t('campaigns.stats.processing')} tone={TatvaColors.indigoContent} />
+      <Stat value={props.processing} label={t('campaigns.stats.processing')} tone={colors.indigoContent} />
     </View>
   );
 }
 
 function Stat({ value, label, tone }: { value: number; label: string; tone: string }) {
+  const { statStyles } = useCampaignThemeStyles();
+
   return (
     <View style={statStyles.cell}>
       <Text style={[statStyles.value, { color: tone }]}>{value}</Text>
@@ -212,13 +225,15 @@ function Stat({ value, label, tone }: { value: number; label: string; tone: stri
 }
 
 function Divider() {
+  const { statStyles } = useCampaignThemeStyles();
   return <View style={statStyles.divider} />;
 }
 
 // ─── Campaign card ────────────────────────────────────────────────────────
 function CampaignCard({ item, onPress }: { item: CampaignRow; onPress: () => void }) {
   const { t } = useTranslation();
-  const status = StatusToTatva[item.status as CampaignStatus] || StatusToTatva.scheduled;
+  const { colors, status: statusMap, cardStyles } = useCampaignThemeStyles();
+  const status = statusMap[item.status as CampaignStatus] || statusMap.scheduled;
   const sent = item.totalContacts ?? 0;
   const connected = item.completedCount ?? 0;
   const pending = Math.max(sent - connected, 0);
@@ -230,7 +245,7 @@ function CampaignCard({ item, onPress }: { item: CampaignRow; onPress: () => voi
       <View style={cardStyles.topRow}>
         <View style={cardStyles.titleRow}>
           <View style={cardStyles.iconTile}>
-            <MegaphoneIcon size={16} color={TatvaColors.contentPrimary} weight="regular" />
+            <MegaphoneIcon size={16} color={colors.contentPrimary} weight="regular" />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={cardStyles.title} numberOfLines={1}>{item.name}</Text>
@@ -247,30 +262,30 @@ function CampaignCard({ item, onPress }: { item: CampaignRow; onPress: () => voi
 
       <View style={cardStyles.kpiRow}>
         <Kpi
-          icon={<PaperPlaneTiltIcon size={12} color={TatvaColors.contentTertiary} weight="regular" />}
+          icon={<PaperPlaneTiltIcon size={12} color={colors.contentTertiary} weight="regular" />}
           label={t('campaigns.kpi.targeted')}
           value={sent}
-          tone={TatvaColors.contentPrimary}
+          tone={colors.contentPrimary}
         />
         <Kpi
-          icon={<CheckCircleIcon size={12} color={TatvaColors.positiveContent} weight="regular" />}
+          icon={<CheckCircleIcon size={12} color={colors.positiveContent} weight="regular" />}
           label={t('campaigns.kpi.connected')}
           value={connected}
-          tone={TatvaColors.positiveContent}
+          tone={colors.positiveContent}
         />
         <Kpi
-          icon={<ClockIcon size={12} color={TatvaColors.dangerContent} weight="regular" />}
+          icon={<ClockIcon size={12} color={colors.dangerContent} weight="regular" />}
           label={t('campaigns.kpi.pending')}
           value={pending}
-          tone={TatvaColors.dangerContent}
+          tone={colors.dangerContent}
         />
       </View>
 
       <View style={cardStyles.creditsRow}>
-        <WalletIcon size={12} color={TatvaColors.contentTertiary} weight="regular" />
+        <WalletIcon size={12} color={colors.contentTertiary} weight="regular" />
         <Text style={cardStyles.creditsText}>
           {t('campaigns.creditsUsed')}{' '}
-          <Text style={{ color: TatvaColors.contentPrimary, fontWeight: '600' }}>
+          <Text style={{ color: colors.contentPrimary, fontWeight: '600' }}>
             {item.creditsCharged ?? 0}
           </Text>
         </Text>
@@ -290,6 +305,8 @@ function Kpi({
   value: number;
   tone: string;
 }) {
+  const { cardStyles } = useCampaignThemeStyles();
+
   return (
     <View style={cardStyles.kpi}>
       {icon}
@@ -338,8 +355,9 @@ function formatDate(iso: string): string {
 
 // ─── Styles ───────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: TatvaColors.surfacePrimary },
+const makeStyles = (colors: TatvaColorTokens) => ({
+styles: StyleSheet.create({
+  shell: { flex: 1, backgroundColor: colors.surfacePrimary },
 
   header: {
     flexDirection: 'row',
@@ -347,28 +365,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: TatvaColors.borderSecondary,
+    borderBottomColor: colors.borderSecondary,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   brandTile: {
     width: 28,
     height: 28,
     borderRadius: 6,
-    backgroundColor: TatvaColors.indigoContent,
+    backgroundColor: colors.indigoContent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   brandTileText: {
-    color: TatvaColors.contentInverse,
+    color: colors.contentInverse,
     fontSize: 14,
     fontWeight: '700',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
   },
   iconBtn: {
     width: 36,
@@ -390,22 +408,22 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: Radius.md,
-    backgroundColor: TatvaColors.backgroundSecondary,
+    backgroundColor: colors.backgroundSecondary,
     borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
   },
   emptyTitle: {
     ...Type.headingSm,
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
     fontWeight: '600',
     marginBottom: 4,
   },
   emptyText: {
     fontSize: 13,
-    color: TatvaColors.contentSecondary,
+    color: colors.contentSecondary,
     textAlign: 'center',
     marginBottom: 18,
   },
@@ -413,25 +431,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: TatvaColors.brandPrimary,
+    backgroundColor: colors.brandPrimary,
     paddingVertical: 11,
     paddingHorizontal: 18,
     borderRadius: Radius.md,
   },
   primaryBtnText: {
-    color: TatvaColors.contentInverse,
+    color: colors.contentInverse,
     fontWeight: '600',
     fontSize: 14,
   },
-});
+}),
 
-const statStyles = StyleSheet.create({
+statStyles: StyleSheet.create({
   bar: {
     flexDirection: 'row',
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     paddingVertical: 16,
     marginBottom: 14,
   },
@@ -444,23 +462,23 @@ const statStyles = StyleSheet.create({
   label: {
     fontSize: 10,
     fontWeight: '600',
-    color: TatvaColors.contentTertiary,
+    color: colors.contentTertiary,
     marginTop: 4,
     letterSpacing: 0.6,
   },
   divider: {
     width: 1,
-    backgroundColor: TatvaColors.borderPrimary,
+    backgroundColor: colors.borderPrimary,
     marginVertical: 4,
   },
-});
+}),
 
-const cardStyles = StyleSheet.create({
+cardStyles: StyleSheet.create({
   card: {
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     padding: 14,
     marginBottom: 10,
     gap: 12,
@@ -482,20 +500,20 @@ const cardStyles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: Radius.md,
-    backgroundColor: TatvaColors.backgroundSecondary,
+    backgroundColor: colors.backgroundSecondary,
     borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
     fontSize: 15,
     fontWeight: '600',
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
   },
   date: {
     fontSize: 11,
-    color: TatvaColors.contentTertiary,
+    color: colors.contentTertiary,
     marginTop: 1,
   },
   chip: {
@@ -521,7 +539,7 @@ const cardStyles = StyleSheet.create({
   },
   kpiLabel: {
     fontSize: 12,
-    color: TatvaColors.contentSecondary,
+    color: colors.contentSecondary,
     marginLeft: 2,
   },
   kpiValue: {
@@ -535,10 +553,11 @@ const cardStyles = StyleSheet.create({
     gap: 6,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: TatvaColors.borderPrimary,
+    borderTopColor: colors.borderPrimary,
   },
   creditsText: {
     fontSize: 12,
-    color: TatvaColors.contentSecondary,
+    color: colors.contentSecondary,
   },
+}),
 });

@@ -446,7 +446,7 @@
       "phoneLabel": "Phone number",
       "phoneHint": "10-digit Indian number (hum +91 add kar denge), ya pura country code + ke saath daalein.",
       "phonePlaceholder": "9876543210",
-      "placeCall": "📞 Test call lagayein",
+      "placeCall": "Test call lagayein",
       "footnote": "Ek tap par ek call. Daala gaya phone kuch second mein bajne lagega. Aapke business ke call rates ke according charges ho sakte hain.",
       "alerts": {
         "nameNeededTitle": "Naam chahiye",

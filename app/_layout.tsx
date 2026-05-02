@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { View, StyleSheet, ActivityIndicator, LogBox } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, LogBox, Platform } from 'react-native';
 import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Hide the in-app yellow "Open debugger to see X warnings" strip.
@@ -23,7 +24,7 @@ import {
 // app.json — do NOT spread `.font` into useFonts.
 import { useAuthStore } from '../src/stores/authStore';
 import PersistentTabBar from '../src/components/PersistentTabBar';
-import { TatvaColors } from '../src/constants/theme';
+import { AppThemeProvider, useAppTheme } from '../src/theme/AppThemeProvider';
 // Side-effect import: initialises i18next + react-i18next once at app
 // boot so every screen's `useTranslation()` hook resolves immediately.
 import '../src/i18n';
@@ -49,7 +50,16 @@ import '../src/i18n';
  *      onboarding paths and when the keyboard is open.
  */
 export default function RootLayout() {
+  return (
+    <AppThemeProvider>
+      <RootLayoutContent />
+    </AppThemeProvider>
+  );
+}
+
+function RootLayoutContent() {
   const hydrate = useAuthStore((s) => s.hydrate);
+  const { colors, scheme } = useAppTheme();
 
   // useFonts returns [loaded, error]. We watch both — if `error` fires
   // we still proceed (system fallback), but we log so the dev can see
@@ -79,24 +89,50 @@ export default function RootLayout() {
     void hydrate();
   }, [hydrate]);
 
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const buttonStyle = scheme === 'dark' ? 'light' : 'dark';
+    const navStyle = scheme === 'dark' ? 'dark' : 'light';
+    let cancelled = false;
+
+    void import('expo-navigation-bar')
+      .then((NavigationBar) => {
+        if (cancelled) return;
+        NavigationBar.setStyle(navStyle);
+        void NavigationBar.setButtonStyleAsync(buttonStyle).catch(() => undefined);
+        void NavigationBar.setBackgroundColorAsync(colors.surfacePrimary).catch(() => undefined);
+        void NavigationBar.setBorderColorAsync(colors.borderPrimary).catch(() => undefined);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [colors.borderPrimary, colors.surfacePrimary, scheme]);
+
   const ready = fontsLoaded || !!fontError || proceedAnyway;
 
   if (!ready) {
     return (
-      <View style={[styles.shell, styles.center]}>
-        <ActivityIndicator color={TatvaColors.brandPrimary} />
+      <View style={[styles.shell, styles.center, { backgroundColor: colors.surfacePrimary }]}>
+        <ActivityIndicator color={colors.brandPrimary} />
       </View>
     );
   }
 
   return (
     <SafeAreaProvider>
-      <View style={styles.shell}>
+      <View style={[styles.shell, { backgroundColor: colors.surfacePrimary }]}>
+        <StatusBar
+          style={scheme === 'dark' ? 'light' : 'dark'}
+          backgroundColor={colors.surfacePrimary}
+        />
         <View style={styles.stackHost}>
           <Stack
             screenOptions={{
               headerShown: false,
-              contentStyle: { backgroundColor: TatvaColors.surfacePrimary },
+              contentStyle: { backgroundColor: colors.surfacePrimary },
             }}
           >
             <Stack.Screen name="index" />
@@ -118,7 +154,7 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: TatvaColors.surfacePrimary },
+  shell: { flex: 1 },
   stackHost: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center' },
 });

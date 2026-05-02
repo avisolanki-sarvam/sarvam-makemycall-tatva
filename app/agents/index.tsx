@@ -11,7 +11,7 @@
  * agent"), this screen is registry-first ("here's everything you've got").
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -32,7 +32,9 @@ import {
 } from 'phosphor-react-native';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../src/services/api';
-import { TatvaColors, Radius, Type } from '../../src/constants/theme';
+import { Radius, Type } from '../../src/constants/theme';
+import type { TatvaColorTokens } from '../../src/constants/theme';
+import { useAppTheme } from '../../src/theme/AppThemeProvider';
 
 interface AgentSummary {
   id: string;
@@ -44,9 +46,16 @@ interface AgentSummary {
   summaryNL: { whatItDoes?: string };
 }
 
+function useAgentsThemeStyles() {
+  const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme.colors), [theme.colors]);
+  return { ...theme, styles };
+}
+
 export default function AgentsIndexScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, scheme, styles } = useAgentsThemeStyles();
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -85,7 +94,10 @@ export default function AgentsIndexScreen() {
 
   return (
     <SafeAreaView style={styles.shell} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={TatvaColors.surfaceSecondary} />
+      <StatusBar
+        barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.surfaceSecondary}
+      />
 
       {/* ─── Header ──────────────────────────────────────────── */}
       <View style={styles.header}>
@@ -102,7 +114,7 @@ export default function AgentsIndexScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={TatvaColors.indigoContent} size="large" />
+          <ActivityIndicator color={colors.indigoContent} size="large" />
         </View>
       ) : agents.length === 0 ? (
         <View style={styles.emptyWrap}>
@@ -113,7 +125,7 @@ export default function AgentsIndexScreen() {
             onPress={() => router.push('/agents/new')}
             activeOpacity={0.9}
           >
-            <PlusIcon size={14} color={TatvaColors.contentInverse} weight="bold" />
+            <PlusIcon size={14} color={colors.contentInverse} weight="bold" />
             <Text style={styles.primaryBtnText}>{t('agents.newAgent')}</Text>
           </TouchableOpacity>
         </View>
@@ -126,7 +138,7 @@ export default function AgentsIndexScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={TatvaColors.indigoContent}
+              tintColor={colors.indigoContent}
             />
           }
           renderItem={({ item }) => <AgentRow item={item} onPress={() => router.push(`/agent-preview/${item.id}`)} />}
@@ -136,7 +148,7 @@ export default function AgentsIndexScreen() {
               onPress={() => router.push('/agents/new')}
               activeOpacity={0.7}
             >
-              <PlusIcon size={14} color={TatvaColors.contentSecondary} weight="regular" />
+              <PlusIcon size={14} color={colors.contentSecondary} weight="regular" />
               <Text style={styles.addCtaText}>{t('agents.newAgent')}</Text>
             </TouchableOpacity>
           }
@@ -149,6 +161,7 @@ export default function AgentsIndexScreen() {
 // ─── Agent row ────────────────────────────────────────────────────────────
 function AgentRow({ item, onPress }: { item: AgentSummary; onPress: () => void }) {
   const { t } = useTranslation();
+  const { colors, styles } = useAgentsThemeStyles();
   const initials = (item.name || '?').slice(0, 2).toUpperCase();
   const isReady = item.status === 'ready';
   const StatusIco = isReady ? null : item.status === 'creating' ? ArrowsClockwiseIcon : null;
@@ -164,7 +177,7 @@ function AgentRow({ item, onPress }: { item: AgentSummary; onPress: () => void }
         </Text>
         {item.phoneNumber ? (
           <View style={styles.metaRow}>
-            <PhoneIcon size={11} color={TatvaColors.contentTertiary} weight="regular" />
+            <PhoneIcon size={11} color={colors.contentTertiary} weight="regular" />
             <Text style={styles.meta} numberOfLines={1}>
               {item.phoneNumber}
             </Text>
@@ -173,40 +186,40 @@ function AgentRow({ item, onPress }: { item: AgentSummary; onPress: () => void }
       </View>
       {!isReady && (
         <View style={[styles.chip, item.status === 'failed' && styles.chipFailed]}>
-          {StatusIco ? <StatusIco size={10} color={TatvaColors.warningContent} weight="regular" /> : null}
+          {StatusIco ? <StatusIco size={10} color={colors.warningContent} weight="regular" /> : null}
           <Text style={[styles.chipText, item.status === 'failed' && styles.chipTextFailed]}>
             {item.status === 'creating' ? t('agents.status.settingUp') : t('agents.status.failed')}
           </Text>
         </View>
       )}
-      <CaretRightIcon size={16} color={TatvaColors.contentTertiary} weight="regular" />
+      <CaretRightIcon size={16} color={colors.contentTertiary} weight="regular" />
     </TouchableOpacity>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: TatvaColors.surfacePrimary },
+const makeStyles = (colors: TatvaColorTokens) => StyleSheet.create({
+  shell: { flex: 1, backgroundColor: colors.surfacePrimary },
 
   header: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 14,
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: TatvaColors.borderSecondary,
+    borderBottomColor: colors.borderSecondary,
   },
   backBtn: { alignSelf: 'flex-start', marginBottom: 8 },
-  backTxt: { fontSize: 14, color: TatvaColors.contentSecondary, fontWeight: '500' },
+  backTxt: { fontSize: 14, color: colors.contentSecondary, fontWeight: '500' },
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
   },
   subtitle: {
     ...Type.bodySm,
-    color: TatvaColors.contentTertiary,
+    color: colors.contentTertiary,
     marginTop: 2,
   },
 
@@ -223,11 +236,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     ...Type.headingSm,
     fontWeight: '600',
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
   },
   emptyText: {
     fontSize: 13,
-    color: TatvaColors.contentSecondary,
+    color: colors.contentSecondary,
     textAlign: 'center',
     marginBottom: 16,
   },
@@ -235,13 +248,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: TatvaColors.brandPrimary,
+    backgroundColor: colors.brandPrimary,
     paddingVertical: 11,
     paddingHorizontal: 18,
     borderRadius: Radius.md,
   },
   primaryBtnText: {
-    color: TatvaColors.contentInverse,
+    color: colors.contentInverse,
     fontWeight: '600',
     fontSize: 14,
   },
@@ -250,10 +263,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     padding: 14,
     marginBottom: 10,
   },
@@ -261,21 +274,21 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: Radius.full,
-    backgroundColor: TatvaColors.backgroundSecondary,
+    backgroundColor: colors.backgroundSecondary,
     borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   medallionText: {
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
     fontSize: 13,
     fontWeight: '700',
   },
   name: {
     fontSize: 15,
     fontWeight: '600',
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
   },
   metaRow: {
     flexDirection: 'row',
@@ -285,7 +298,7 @@ const styles = StyleSheet.create({
   },
   meta: {
     fontSize: 12,
-    color: TatvaColors.contentTertiary,
+    color: colors.contentTertiary,
   },
   chip: {
     flexDirection: 'row',
@@ -294,15 +307,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: Radius.full,
-    backgroundColor: TatvaColors.warningBackground,
+    backgroundColor: colors.warningBackground,
   },
-  chipFailed: { backgroundColor: TatvaColors.dangerBackground },
+  chipFailed: { backgroundColor: colors.dangerBackground },
   chipText: {
     fontSize: 10,
     fontWeight: '600',
-    color: TatvaColors.warningContent,
+    color: colors.warningContent,
   },
-  chipTextFailed: { color: TatvaColors.dangerContent },
+  chipTextFailed: { color: colors.dangerContent },
 
   addCta: {
     flexDirection: 'row',
@@ -311,13 +324,13 @@ const styles = StyleSheet.create({
     gap: 6,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     borderRadius: Radius.lg,
     paddingVertical: 14,
     marginTop: 4,
   },
   addCtaText: {
-    color: TatvaColors.contentSecondary,
+    color: colors.contentSecondary,
     fontSize: 13,
     fontWeight: '500',
   },

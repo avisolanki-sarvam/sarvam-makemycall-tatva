@@ -44,16 +44,17 @@ import { CaretLeftIcon, PlusIcon, XIcon } from 'phosphor-react-native';
 import { api } from '../../../src/services/api';
 import { useContactStore, type Contact } from '../../../src/stores/contactStore';
 import {
-  TatvaColors,
   Radius,
   Spacing,
   Type,
   Weight,
 } from '../../../src/constants/theme';
+import type { TatvaColorTokens } from '../../../src/constants/theme';
 import { AppText } from '../../../src/components/AppText';
 import { Input } from '../../../src/components/Input';
 import { Button } from '../../../src/components/Button';
 import { TatvaIcon } from '../../../src/components/TatvaIcon';
+import { useAppTheme } from '../../../src/theme/AppThemeProvider';
 
 interface KVRow {
   key: string;
@@ -62,11 +63,18 @@ interface KVRow {
 
 const newRow = (): KVRow => ({ key: '', value: '' });
 
+function useEditContactThemeStyles() {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  return { colors, styles };
+}
+
 export default function EditContactScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, styles } = useEditContactThemeStyles();
 
   const contacts = useContactStore((s) => s.contacts);
   const updateContact = useContactStore((s) => s.updateContact);
@@ -197,7 +205,7 @@ export default function EditContactScreen() {
   if (hydrating) {
     return (
       <SafeAreaView style={[styles.shell, styles.center]} edges={['top']}>
-        <ActivityIndicator color={TatvaColors.brandPrimary} />
+        <ActivityIndicator color={colors.brandPrimary} />
       </SafeAreaView>
     );
   }
@@ -210,7 +218,7 @@ export default function EditContactScreen() {
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-            <CaretLeftIcon size={22} color={TatvaColors.contentPrimary} weight="regular" />
+            <CaretLeftIcon size={22} color={colors.contentPrimary} weight="regular" />
           </TouchableOpacity>
           <AppText variant="heading-md">{t('contacts.edit.title')}</AppText>
           <View style={{ width: 22 }} />
@@ -251,7 +259,7 @@ export default function EditContactScreen() {
               <TextInput
                 style={styles.notesInput}
                 placeholder={t('contacts.edit.notesPlaceholder')}
-                placeholderTextColor={TatvaColors.contentQuaternary}
+                placeholderTextColor={colors.contentQuaternary}
                 value={notes}
                 onChangeText={setNotes}
                 multiline
@@ -292,12 +300,12 @@ export default function EditContactScreen() {
                     style={styles.cfDelete}
                     hitSlop={8}
                   >
-                    <XIcon size={14} color={TatvaColors.contentTertiary} weight="regular" />
+                    <XIcon size={14} color={colors.contentTertiary} weight="regular" />
                   </TouchableOpacity>
                 </View>
               ))}
               <TouchableOpacity onPress={appendKv} style={styles.cfAdd} activeOpacity={0.7}>
-                <PlusIcon size={14} color={TatvaColors.contentPrimary} weight="regular" />
+                <PlusIcon size={14} color={colors.contentPrimary} weight="regular" />
                 <AppText variant="body-sm" style={{ fontWeight: Weight.semibold }}>
                   {t('contacts.edit.addField')}
                 </AppText>
@@ -317,10 +325,10 @@ export default function EditContactScreen() {
 
           <View style={styles.dangerBlock}>
             <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn}>
-              <TatvaIcon name="delete" size="sm" color={TatvaColors.dangerContent} />
+              <TatvaIcon name="delete" size="sm" color={colors.dangerContent} />
               <AppText
                 variant="body-sm"
-                style={{ color: TatvaColors.dangerContent, fontWeight: Weight.semibold }}
+                style={{ color: colors.dangerContent, fontWeight: Weight.semibold }}
               >
                 {t('contacts.edit.delete')}
               </AppText>
@@ -334,8 +342,8 @@ export default function EditContactScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: TatvaColors.surfacePrimary },
+const makeStyles = (colors: TatvaColorTokens) => StyleSheet.create({
+  shell: { flex: 1, backgroundColor: colors.surfacePrimary },
   center: { alignItems: 'center', justifyContent: 'center' },
 
   header: {
@@ -359,10 +367,10 @@ const styles = StyleSheet.create({
   // ─── Notes block ─────────────────────────────────────────────
   notesBlock: { gap: Spacing['3'] },
   notesShell: {
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     paddingHorizontal: Spacing['6'],
     paddingVertical: Spacing['5'],
     minHeight: 96,
@@ -370,7 +378,7 @@ const styles = StyleSheet.create({
   notesInput: {
     flex: 1,
     minHeight: 80,
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
     ...Type.bodyMd,
   },
 
@@ -387,7 +395,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: TatvaColors.surfaceTertiary,
+    backgroundColor: colors.surfaceTertiary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -401,7 +409,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     borderStyle: 'dashed',
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     marginTop: Spacing['1'],
   },
 
@@ -409,7 +417,7 @@ const styles = StyleSheet.create({
   dangerBlock: {
     paddingTop: Spacing['8'],
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: TatvaColors.borderPrimary,
+    borderTopColor: colors.borderPrimary,
     alignItems: 'center',
   },
   deleteBtn: {

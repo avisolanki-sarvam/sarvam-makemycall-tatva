@@ -10,15 +10,18 @@ import {
   ActivityIndicator,
   ScrollView,
   Modal,
+  StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ClipboardTextIcon, DeviceMobileIcon } from 'phosphor-react-native';
 import { useContactStore, type Contact } from '../../src/stores/contactStore';
 import { api } from '../../src/services/api';
-import { COLORS } from '../../src/constants/api';
+import type { LegacyColorTokens } from '../../src/constants/theme';
 import { loadDeviceContacts, type DeviceContact } from '../../src/services/contactImport';
 import { TatvaIcon } from '../../src/components/TatvaIcon';
+import { useAppTheme } from '../../src/theme/AppThemeProvider';
 
 // 4 add modes surfaced as prominent buttons at the top of the Contacts
 // tab. Each routes to /contacts/import with the matching mode pre-selected.
@@ -55,6 +58,12 @@ type KVRow = { key: string; value: string };
 
 const newRow = (): KVRow => ({ key: '', value: '' });
 
+function useContactsThemeStyles() {
+  const { legacyColors: COLORS, scheme } = useAppTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return { COLORS, scheme, styles };
+}
+
 // Subtitle shown on each contact row: first non-empty custom field → notes
 // preview (first ~40 chars) → phone. Per the "Custom fields" plan in the
 // status board.
@@ -72,6 +81,7 @@ function subtitleFor(c: Contact): string {
 export default function ContactsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { COLORS, scheme, styles } = useContactsThemeStyles();
   const {
     contacts,
     searchQuery,
@@ -263,7 +273,11 @@ export default function ContactsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar
+        barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={COLORS.background}
+      />
       {/* Add-mode header — 4 prominent buttons for the four input modes
           (Paste / Photo / Voice / From phone). Each deep-links into
           /contacts/import with the chosen mode pre-selected. /contacts/import
@@ -542,11 +556,13 @@ export default function ContactsScreen() {
           )}
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
 function AddModeIcon({ name }: { name: (typeof ADD_MODES)[number]['icon'] }) {
+  const { legacyColors: COLORS } = useAppTheme();
+
   if (name === 'upload') {
     return <TatvaIcon name="upload" size="lg" tone="brand" />;
   }
@@ -559,7 +575,7 @@ function AddModeIcon({ name }: { name: (typeof ADD_MODES)[number]['icon'] }) {
   return <ClipboardTextIcon size={20} color={COLORS.ink} weight="regular" />;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: LegacyColorTokens) => StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
   // Add-mode header — 4-tile row at the top of the Contacts tab.

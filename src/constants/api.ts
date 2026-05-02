@@ -22,7 +22,7 @@ export const API_BASE_URL =
 // (April 2026 → Tatva fork). To keep this an additive change for the rest
 // of the codebase, re-export `COLORS` from `theme.ts` — the named keys are
 // preserved (`primary`, `surface`, `ink`, etc.) but they now resolve to
-// Tatva-mapped values (white surfaces, near-black brand, indigo accent,
+// Tatva-mapped values (white surfaces, near-black brand, neutral accent,
 // semantic-state colours).
 //
 // New screens should import from `./theme` directly so they get the full

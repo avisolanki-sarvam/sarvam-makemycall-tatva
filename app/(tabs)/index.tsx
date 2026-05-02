@@ -52,10 +52,12 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../src/stores/authStore';
 import { api } from '../../src/services/api';
-import { TatvaColors, Radius, Spacing, Shadow, Weight, StatusToTatva, CampaignStatus } from '../../src/constants/theme';
+import { Radius, Spacing, Shadow, Weight } from '../../src/constants/theme';
+import type { CampaignStatus, TatvaColorTokens } from '../../src/constants/theme';
 import { AppText } from '../../src/components/AppText';
 import { BrandMark } from '../../src/components/BrandMark';
 import { TatvaIcon } from '../../src/components/TatvaIcon';
+import { useAppTheme } from '../../src/theme/AppThemeProvider';
 
 interface DashboardData {
   creditBalance: number;
@@ -94,9 +96,16 @@ interface CampaignSummary {
   createdAt: string;
 }
 
+function useHomeThemeStyles() {
+  const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme.colors), [theme.colors]);
+  return { ...theme, styles };
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, scheme, styles } = useHomeThemeStyles();
   const user = useAuthStore((s) => s.user);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
@@ -145,7 +154,10 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.shell} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor={TatvaColors.surfacePrimary} />
+      <StatusBar
+        barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.surfacePrimary}
+      />
 
       {/* ─── Top bar ───────────────────────────────────────────── */}
       <View style={styles.topBar}>
@@ -162,10 +174,10 @@ export default function HomeScreen() {
           activeOpacity={0.85}
           onPress={() => router.push('/credits')}
         >
-          <WalletIcon size={14} color={TatvaColors.brandContent} weight="regular" />
+          <WalletIcon size={14} color={colors.brandContent} weight="regular" />
           <AppText
             variant="body-sm"
-            style={{ color: TatvaColors.brandContent, fontWeight: Weight.semibold }}
+            style={{ color: colors.brandContent, fontWeight: Weight.semibold }}
           >
             {credits.toLocaleString('en-IN')}
           </AppText>
@@ -179,7 +191,7 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={TatvaColors.brandPrimary}
+            tintColor={colors.brandPrimary}
           />
         }
       >
@@ -206,7 +218,7 @@ export default function HomeScreen() {
               <AppText
                 variant="label-sm"
                 style={{
-                  color: TatvaColors.brandContent,
+                  color: colors.brandContent,
                   opacity: 0.85,
                   textTransform: 'uppercase',
                   marginBottom: Spacing['2'],
@@ -216,7 +228,7 @@ export default function HomeScreen() {
               </AppText>
               <AppText
                 variant="numeral-lg"
-                style={{ color: TatvaColors.contentPrimary }}
+                style={{ color: colors.contentPrimary }}
               >
                 {credits.toLocaleString('en-IN')}
               </AppText>
@@ -229,7 +241,7 @@ export default function HomeScreen() {
               </AppText>
             </View>
             <View style={styles.creditsCta}>
-              <PlusIcon size={18} color={TatvaColors.contentPrimary} weight="bold" />
+              <PlusIcon size={18} color={colors.brandContentInverse} weight="bold" />
             </View>
           </View>
         </TouchableOpacity>
@@ -324,6 +336,8 @@ function SectionHeader({
   onCreate,
   createLabel,
 }: SectionHeaderProps) {
+  const { colors, styles } = useHomeThemeStyles();
+
   return (
     <View style={styles.sectionHeader}>
       <View style={styles.sectionTitleRow}>
@@ -343,7 +357,7 @@ function SectionHeader({
             </AppText>
             <CaretRightIcon
               size={14}
-              color={TatvaColors.indigoContent}
+              color={colors.indigoContent}
               weight="bold"
             />
           </TouchableOpacity>
@@ -355,7 +369,7 @@ function SectionHeader({
           activeOpacity={0.85}
           style={styles.createBtn}
         >
-          <PlusIcon size={14} color={TatvaColors.contentPrimary} weight="bold" />
+          <PlusIcon size={14} color={colors.contentPrimary} weight="bold" />
           <AppText
             variant="body-sm"
             style={{ fontWeight: Weight.semibold }}
@@ -377,6 +391,8 @@ interface AgentTileProps {
 }
 
 function AgentTile({ agent, onOpen, onStartCalls }: AgentTileProps) {
+  const { colors, styles } = useHomeThemeStyles();
+
   return (
     <TouchableOpacity
       style={styles.peekTile}
@@ -401,11 +417,11 @@ function AgentTile({ agent, onOpen, onStartCalls }: AgentTileProps) {
         onPress={onStartCalls}
         activeOpacity={0.85}
       >
-        <PhoneCallIcon size={12} color={TatvaColors.brandContentInverse} weight="bold" />
+        <PhoneCallIcon size={12} color={colors.brandContentInverse} weight="bold" />
         <AppText
           variant="body-xs"
           style={{
-            color: TatvaColors.brandContentInverse,
+            color: colors.brandContentInverse,
             fontWeight: Weight.semibold,
           }}
         >
@@ -424,7 +440,9 @@ interface CampaignTileProps {
 }
 
 function CampaignTile({ campaign, onPress }: CampaignTileProps) {
-  const status = StatusToTatva[(campaign.status as CampaignStatus) || 'scheduled'];
+  const { colors, status: statusMap, styles } = useHomeThemeStyles();
+  const status = statusMap[(campaign.status as CampaignStatus) || 'scheduled'];
+
   return (
     <TouchableOpacity
       style={styles.peekTile}
@@ -432,10 +450,10 @@ function CampaignTile({ campaign, onPress }: CampaignTileProps) {
       onPress={onPress}
       accessibilityRole="button"
     >
-      <View style={[styles.tileMedallion, { backgroundColor: TatvaColors.indigoBackground }]}>
+      <View style={[styles.tileMedallion, { backgroundColor: colors.indigoBackground }]}>
         <MegaphoneIcon
           size={18}
-          color={TatvaColors.indigoContent}
+          color={colors.indigoContent}
           weight="regular"
         />
       </View>
@@ -466,6 +484,8 @@ function CreatePlaceholderTile({
   label: string;
   onPress: () => void;
 }) {
+  const { colors, styles } = useHomeThemeStyles();
+
   return (
     <TouchableOpacity
       style={[styles.peekTile, styles.peekTileDashed]}
@@ -473,9 +493,15 @@ function CreatePlaceholderTile({
       onPress={onPress}
     >
       <View style={[styles.tileMedallion, styles.tileMedallionGhost]}>
-        <PlusIcon size={20} color={TatvaColors.contentTertiary} weight="bold" />
+        <PlusIcon size={20} color={colors.contentTertiary} weight="bold" />
       </View>
-      <AppText variant="body-sm" tone="secondary" style={{ fontWeight: Weight.medium }}>
+      <AppText
+        variant="body-sm"
+        tone="secondary"
+        align="center"
+        numberOfLines={2}
+        style={styles.placeholderLabel}
+      >
         {label}
       </AppText>
     </TouchableOpacity>
@@ -484,8 +510,8 @@ function CreatePlaceholderTile({
 
 // ─── Styles ──────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: TatvaColors.surfacePrimary },
+const makeStyles = (colors: TatvaColorTokens) => StyleSheet.create({
+  shell: { flex: 1, backgroundColor: colors.surfacePrimary },
 
   // ─── Top bar ─────────────────────────────────────────────────
   topBar: {
@@ -495,16 +521,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['8'],
     paddingTop: Spacing['6'],
     paddingBottom: Spacing['6'],
-    backgroundColor: TatvaColors.surfacePrimary,
+    backgroundColor: colors.surfacePrimary,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: TatvaColors.borderPrimary,
+    borderBottomColor: colors.borderPrimary,
   },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing['4'] },
   walletPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing['3'],
-    backgroundColor: TatvaColors.brandSurface,
+    backgroundColor: colors.brandSurface,
     paddingHorizontal: Spacing['6'],
     paddingVertical: Spacing['3'],
     borderRadius: Radius.full,
@@ -520,12 +546,12 @@ const styles = StyleSheet.create({
 
   // ─── Credits hero ────────────────────────────────────────────
   creditsHero: {
-    backgroundColor: TatvaColors.brandSurface,
+    backgroundColor: colors.brandSurface,
     borderRadius: Radius.lg,
     padding: Spacing['10'],
     marginBottom: Spacing['12'],
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: TatvaColors.brandPrimary,
+    borderColor: colors.brandPrimary,
   },
   creditsHeroRow: {
     flexDirection: 'row',
@@ -536,7 +562,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: TatvaColors.brandPrimary,
+    backgroundColor: colors.brandPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -569,9 +595,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['5'],
     paddingVertical: Spacing['3'],
     borderRadius: Radius.full,
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
   },
 
   // ─── Tile row ───────────────────────────────────────────────
@@ -582,32 +608,40 @@ const styles = StyleSheet.create({
   },
   peekTile: {
     flex: 1,
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     padding: Spacing['8'],
     minHeight: 160,
     gap: Spacing['2'],
     ...Shadow.l1,
   },
   peekTileDashed: {
-    borderStyle: 'dashed',
-    backgroundColor: 'transparent',
-    alignItems: 'flex-start',
+    backgroundColor: colors.surfaceSecondary,
+    alignItems: 'center',
     justifyContent: 'center',
+    elevation: 0,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
   },
   tileMedallion: {
     width: 36,
     height: 36,
     borderRadius: Radius.full,
-    backgroundColor: TatvaColors.brandSurface,
+    backgroundColor: colors.brandSurface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing['3'],
   },
   tileMedallionGhost: {
-    backgroundColor: TatvaColors.surfaceTertiary,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  placeholderLabel: {
+    fontWeight: Weight.medium,
+    lineHeight: 20,
+    paddingHorizontal: Spacing['2'],
   },
   tileTitle: {},
   tileActionBtn: {
@@ -615,7 +649,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing['2'],
-    backgroundColor: TatvaColors.brandPrimary,
+    backgroundColor: colors.brandPrimary,
     paddingVertical: Spacing['3'],
     paddingHorizontal: Spacing['4'],
     borderRadius: Radius.full,

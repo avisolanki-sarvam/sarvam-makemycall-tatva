@@ -22,6 +22,7 @@
  *   6. Log out       — bottom destructive button.
  */
 
+import { useMemo } from 'react';
 import {
   View,
   Text,
@@ -48,11 +49,20 @@ import {
 } from 'phosphor-react-native';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../src/stores/authStore';
-import { TatvaColors, Radius, Type } from '../../src/constants/theme';
+import { Radius, Type } from '../../src/constants/theme';
+import type { TatvaColorTokens } from '../../src/constants/theme';
+import { useAppTheme } from '../../src/theme/AppThemeProvider';
+
+function useSettingsThemeStyles() {
+  const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme.colors), [theme.colors]);
+  return { ...theme, styles };
+}
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, scheme, styles } = useSettingsThemeStyles();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
@@ -74,7 +84,10 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.shell} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={TatvaColors.surfaceSecondary} />
+      <StatusBar
+        barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.surfaceSecondary}
+      />
 
       {/* ─── Header ──────────────────────────────────────────── */}
       <View style={styles.header}>
@@ -140,7 +153,7 @@ export default function SettingsScreen() {
 
         {/* ─── Log out ──────────────────────────────────────── */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
-          <SignOutIcon size={16} color={TatvaColors.dangerContent} weight="regular" />
+          <SignOutIcon size={16} color={colors.dangerContent} weight="regular" />
           <Text style={styles.logoutText}>{t('common.logOut')}</Text>
         </TouchableOpacity>
 
@@ -153,10 +166,12 @@ export default function SettingsScreen() {
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
+  const { styles } = useSettingsThemeStyles();
   return <Text style={styles.sectionLabel}>{children}</Text>;
 }
 
 function Group({ children }: { children: React.ReactNode }) {
+  const { styles } = useSettingsThemeStyles();
   return <View style={styles.group}>{children}</View>;
 }
 
@@ -187,10 +202,11 @@ function Row({
   iconAccent?: string;
   iconBgAccent?: string;
 }) {
+  const { colors, styles } = useSettingsThemeStyles();
   const isStub = !onPress;
-  const fg = iconAccent ?? TatvaColors.contentSecondary;
-  const bg = iconBgAccent ?? TatvaColors.backgroundSecondary;
-  const borderColor = iconBgAccent ? 'transparent' : TatvaColors.borderSecondary;
+  const fg = iconAccent ?? colors.contentSecondary;
+  const bg = iconBgAccent ?? colors.backgroundSecondary;
+  const borderColor = iconBgAccent ? 'transparent' : colors.borderSecondary;
 
   // Stub rows still feel tappable (active opacity, no `disabled`) but we
   // surface their state with a "Soon" pill instead of a chevron, so the
@@ -212,7 +228,7 @@ function Row({
           <Text style={styles.rowValue} numberOfLines={1}>{value}</Text>
         ) : null}
       </View>
-      {isStub ? <SoonPill /> : <CaretRightIcon size={16} color={TatvaColors.contentTertiary} weight="regular" />}
+      {isStub ? <SoonPill /> : <CaretRightIcon size={16} color={colors.contentTertiary} weight="regular" />}
     </TouchableOpacity>
   );
 }
@@ -220,6 +236,7 @@ function Row({
 // Small i18n-aware "Soon" pill used in place of a chevron on stub rows.
 function SoonPill() {
   const { t } = useTranslation();
+  const { styles } = useSettingsThemeStyles();
   return (
     <View style={styles.soonPill}>
       <Text style={styles.soonPillText}>{t('common.soon')}</Text>
@@ -229,36 +246,36 @@ function SoonPill() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: TatvaColors.surfacePrimary },
+const makeStyles = (colors: TatvaColorTokens) => StyleSheet.create({
+  shell: { flex: 1, backgroundColor: colors.surfacePrimary },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: TatvaColors.borderSecondary,
+    borderBottomColor: colors.borderSecondary,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   brandTile: {
     width: 28,
     height: 28,
     borderRadius: 6,
-    backgroundColor: TatvaColors.indigoContent,
+    backgroundColor: colors.indigoContent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   brandTileText: {
-    color: TatvaColors.contentInverse,
+    color: colors.contentInverse,
     fontSize: 14,
     fontWeight: '700',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
   },
 
   scrollContent: { padding: 16, paddingBottom: 32 },
@@ -267,10 +284,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     padding: 16,
     marginBottom: 18,
   },
@@ -278,40 +295,40 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: Radius.full,
-    backgroundColor: TatvaColors.indigoContent,
+    backgroundColor: colors.indigoContent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: TatvaColors.contentInverse,
+    color: colors.contentInverse,
     fontSize: 16,
     fontWeight: '700',
   },
   profileName: {
     fontSize: 17,
     fontWeight: '700',
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
   },
   profilePhone: {
     fontSize: 13,
-    color: TatvaColors.contentSecondary,
+    color: colors.contentSecondary,
     marginTop: 2,
   },
 
   sectionLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: TatvaColors.contentTertiary,
+    color: colors.contentTertiary,
     paddingHorizontal: 4,
     marginTop: 8,
     marginBottom: 8,
     letterSpacing: 0.6,
   },
   group: {
-    backgroundColor: TatvaColors.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
     overflow: 'hidden',
     marginBottom: 6,
   },
@@ -325,7 +342,7 @@ const styles = StyleSheet.create({
   },
   rowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: TatvaColors.borderPrimary,
+    borderBottomColor: colors.borderPrimary,
   },
   rowIcon: {
     width: 28,
@@ -337,12 +354,12 @@ const styles = StyleSheet.create({
   rowLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: TatvaColors.contentPrimary,
+    color: colors.contentPrimary,
   },
-  rowLabelStub: { color: TatvaColors.contentSecondary },
+  rowLabelStub: { color: colors.contentSecondary },
   rowValue: {
     fontSize: 12,
-    color: TatvaColors.contentTertiary,
+    color: colors.contentTertiary,
     marginTop: 2,
   },
   // ─── "Soon" pill ─ shown on rows whose backend isn't wired yet ───
@@ -350,14 +367,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: Radius.full,
-    backgroundColor: TatvaColors.backgroundSecondary,
+    backgroundColor: colors.backgroundSecondary,
     borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
+    borderColor: colors.borderSecondary,
   },
   soonPillText: {
     fontSize: 10,
     fontWeight: '700',
-    color: TatvaColors.contentTertiary,
+    color: colors.contentTertiary,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
@@ -371,18 +388,18 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: TatvaColors.borderSecondary,
-    backgroundColor: TatvaColors.surfaceSecondary,
+    borderColor: colors.borderSecondary,
+    backgroundColor: colors.surfaceSecondary,
   },
   logoutText: {
     fontSize: 14,
     fontWeight: '600',
-    color: TatvaColors.dangerContent,
+    color: colors.dangerContent,
   },
 
   version: {
     fontSize: 11,
-    color: TatvaColors.contentQuaternary,
+    color: colors.contentQuaternary,
     textAlign: 'center',
     marginTop: 14,
   },

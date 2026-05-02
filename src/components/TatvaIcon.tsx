@@ -20,7 +20,8 @@ import {
   Upload01Icon,
   UserMultipleIcon,
 } from '@hugeicons/core-free-icons';
-import { TatvaColors } from '../constants/theme';
+import type { TatvaColorTokens } from '../constants/theme';
+import { useAppTheme } from '../theme/AppThemeProvider';
 
 const ICONS = {
   'arrow-left': ArrowLeft01Icon,
@@ -53,22 +54,36 @@ const SIZE = {
   '3xl': 32,
 } as const;
 
-const TONE = {
-  primary: TatvaColors.contentPrimary,
-  brand: TatvaColors.brandContent,
-  'brand-foreground': TatvaColors.brandContentInverse,
-  secondary: TatvaColors.contentSecondary,
-  tertiary: TatvaColors.contentTertiary,
-  success: TatvaColors.positiveContent,
-  warning: TatvaColors.warningContent,
-  danger: TatvaColors.dangerContent,
-  indigo: TatvaColors.indigoContent,
-  inverse: TatvaColors.contentInverse,
-} as const;
-
 export type TatvaIconName = keyof typeof ICONS;
 export type TatvaIconSize = keyof typeof SIZE;
-export type TatvaIconTone = keyof typeof TONE;
+export type TatvaIconTone =
+  | 'primary'
+  | 'brand'
+  | 'brand-foreground'
+  | 'secondary'
+  | 'tertiary'
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'indigo'
+  | 'inverse';
+
+function resolveIconToneColor(tone: TatvaIconTone, colors: TatvaColorTokens): string {
+  switch (tone) {
+    case 'brand': return colors.brandContent;
+    case 'brand-foreground': return colors.brandContentInverse;
+    case 'secondary': return colors.contentSecondary;
+    case 'tertiary': return colors.contentTertiary;
+    case 'success': return colors.positiveContent;
+    case 'warning': return colors.warningContent;
+    case 'danger': return colors.dangerContent;
+    case 'indigo': return colors.indigoContent;
+    case 'inverse': return colors.contentInverse;
+    case 'primary':
+    default:
+      return colors.contentPrimary;
+  }
+}
 
 interface TatvaIconProps {
   name: TatvaIconName;
@@ -89,6 +104,7 @@ export function TatvaIcon({
   spin = false,
   style,
 }: TatvaIconProps) {
+  const { colors } = useAppTheme();
   const icon = ICONS[name];
   const pixelSize = typeof size === 'number' ? size : SIZE[size];
   const rotation = useRef(new Animated.Value(0)).current;
@@ -116,7 +132,7 @@ export function TatvaIcon({
     <HugeiconsIcon
       icon={icon}
       size={pixelSize}
-      color={color ?? TONE[tone]}
+      color={color ?? resolveIconToneColor(tone, colors)}
       strokeWidth={strokeWidth}
       style={spin ? undefined : style}
     />

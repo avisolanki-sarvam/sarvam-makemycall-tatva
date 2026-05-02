@@ -7,11 +7,8 @@
  *   width:   'full' | 'fit'
  *   isLoading, icon (left/right), iconPosition
  *
- * Note we add a Tatva-extension `'indigo'` variant for the Indus signature
- * surface — the saturated indigo CTA used on the onboarding hero. Tatva
- * web doesn't ship this one out-of-box; Indus pulls it in via the brand
- * surface utility. We expose it as a first-class variant so screens stay
- * declarative.
+ * The historical `'indigo'` variant name is kept as a compatibility alias,
+ * but it resolves through MakeMyCall's neutral/ink accent tokens.
  */
 
 import { ReactNode } from 'react';
@@ -21,7 +18,9 @@ import {
   StyleSheet,
   ViewStyle,
 } from 'react-native';
-import { TatvaColors, Radius, Spacing, Weight } from '../constants/theme';
+import { Radius, Spacing, Weight } from '../constants/theme';
+import type { TatvaColorTokens } from '../constants/theme';
+import { useAppTheme } from '../theme/AppThemeProvider';
 import { AppText } from './AppText';
 
 export type ButtonVariant =
@@ -61,15 +60,28 @@ interface VariantTokens {
   border?: string;
 }
 
-const VARIANTS: Record<ButtonVariant, VariantTokens> = {
-  primary:     { bg: TatvaColors.brandPrimary,    fg: TatvaColors.contentInverse },
-  secondary:   { bg: TatvaColors.surfaceSecondary, fg: TatvaColors.contentPrimary, border: TatvaColors.borderSecondary },
-  destructive: { bg: TatvaColors.dangerContent,   fg: TatvaColors.contentInverse },
-  outline:     { bg: 'transparent',                fg: TatvaColors.contentPrimary, border: TatvaColors.borderTertiary },
-  ghost:       { bg: 'transparent',                fg: TatvaColors.contentPrimary },
-  inverse:     { bg: TatvaColors.surfaceSecondary, fg: TatvaColors.brandPrimary },
-  indigo:      { bg: TatvaColors.indigoSurface,   fg: TatvaColors.contentInverse },
-};
+function resolveButtonVariant(
+  variant: ButtonVariant,
+  colors: TatvaColorTokens,
+): VariantTokens {
+  switch (variant) {
+    case 'secondary':
+      return { bg: colors.surfaceSecondary, fg: colors.contentPrimary, border: colors.borderSecondary };
+    case 'destructive':
+      return { bg: colors.dangerContent, fg: colors.contentInverse };
+    case 'outline':
+      return { bg: 'transparent', fg: colors.contentPrimary, border: colors.borderTertiary };
+    case 'ghost':
+      return { bg: 'transparent', fg: colors.contentPrimary };
+    case 'inverse':
+      return { bg: colors.surfaceSecondary, fg: colors.brandPrimary };
+    case 'indigo':
+      return { bg: colors.indigoSurface, fg: colors.contentInverse };
+    case 'primary':
+    default:
+      return { bg: colors.brandPrimary, fg: colors.contentInverse };
+  }
+}
 
 export function Button({
   children,
@@ -84,7 +96,8 @@ export function Button({
   style,
   accessibilityLabel,
 }: ButtonProps) {
-  const tokens = VARIANTS[variant];
+  const { colors } = useAppTheme();
+  const tokens = resolveButtonVariant(variant, colors);
   const isInert = disabled || isLoading;
 
   return (

@@ -16,7 +16,9 @@
  */
 
 import { Text as RNText, TextProps as RNTextProps, StyleSheet, TextStyle } from 'react-native';
-import { TatvaColors, Type } from '../constants/theme';
+import { Type } from '../constants/theme';
+import type { TatvaColorTokens } from '../constants/theme';
+import { useAppTheme } from '../theme/AppThemeProvider';
 
 export type TextVariant =
   | 'display-lg'
@@ -74,18 +76,22 @@ const VARIANT_TO_STYLE: Record<TextVariant, TextStyle> = {
   'numeral-md': Type.numeralMd,
 };
 
-const TONE_TO_COLOR: Record<TextTone, string> = {
-  default:    TatvaColors.contentPrimary,
-  secondary:  TatvaColors.contentSecondary,
-  tertiary:   TatvaColors.contentTertiary,
-  quaternary: TatvaColors.contentQuaternary,
-  inverse:    TatvaColors.contentInverse,
-  brand:      TatvaColors.brandPrimary,
-  positive:   TatvaColors.positiveContent,
-  warning:    TatvaColors.warningContent,
-  danger:     TatvaColors.dangerContent,
-  indigo:     TatvaColors.indigoContent,
-};
+function resolveTextToneColor(tone: TextTone, colors: TatvaColorTokens): string {
+  switch (tone) {
+    case 'secondary': return colors.contentSecondary;
+    case 'tertiary': return colors.contentTertiary;
+    case 'quaternary': return colors.contentQuaternary;
+    case 'inverse': return colors.contentInverse;
+    case 'brand': return colors.brandPrimary;
+    case 'positive': return colors.positiveContent;
+    case 'warning': return colors.warningContent;
+    case 'danger': return colors.dangerContent;
+    case 'indigo': return colors.indigoContent;
+    case 'default':
+    default:
+      return colors.contentPrimary;
+  }
+}
 
 export function AppText({
   variant = 'body-md',
@@ -95,11 +101,13 @@ export function AppText({
   children,
   ...rest
 }: AppTextProps) {
+  const { colors } = useAppTheme();
+
   return (
     <RNText
       style={StyleSheet.flatten([
         VARIANT_TO_STYLE[variant],
-        { color: TONE_TO_COLOR[tone] },
+        { color: resolveTextToneColor(tone, colors) },
         align ? { textAlign: align } : null,
         style,
       ])}

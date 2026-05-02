@@ -446,7 +446,7 @@
       "phoneLabel": "Phone number",
       "phoneHint": "10-digit Indian number (we'll add +91), or include the full country code with a +.",
       "phonePlaceholder": "9876543210",
-      "placeCall": "📞 Place test call",
+      "placeCall": "Place test call",
       "footnote": "One call per tap. The phone you enter will ring within a few seconds. Charges may apply per your business's call rates.",
       "alerts": {
         "nameNeededTitle": "Name needed",
